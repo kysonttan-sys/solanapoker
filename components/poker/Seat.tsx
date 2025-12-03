@@ -104,7 +104,7 @@ export const Seat: React.FC<SeatProps> = ({
 
   const AvatarComponent = (
      <div className="relative">
-          {player.isTurn && (
+            {player.isTurn && timeLeft > 0 && (
             <svg className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90px] h-[90px] -rotate-90 pointer-events-none z-0 scale-[0.65] md:scale-100">
                 <circle cx="45" cy="45" r={36} fill="none" stroke="#ffffff10" strokeWidth="4" />
                 <circle cx="45" cy="45" r={36} fill="none" stroke={timerColor} strokeWidth="4" strokeDasharray={2 * Math.PI * 36} strokeDashoffset={((totalTime - timeLeft) / totalTime) * (2 * Math.PI * 36)} strokeLinecap="round" className="transition-all duration-1000 ease-linear" />

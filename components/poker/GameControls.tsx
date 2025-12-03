@@ -61,6 +61,14 @@ export const GameControls: React.FC<GameControlsProps> = ({
   // Determine if the current raiseAmount puts user all-in
   const isRaiseAllIn = raiseAmount >= userBalance;
 
+    // Display helpers
+    const minRaiseTo = useMemo(() => {
+            // When there is an existing bet, min raise to = currentBet + lastRaiseAmount
+            // Since client doesn't have lastRaiseAmount, approximate using bigBlind as baseline
+            const baseline = Math.max(bigBlind, currentBet);
+            return Math.min(userBalance, Math.max(baseline * 2, currentBet + bigBlind));
+    }, [currentBet, bigBlind, userBalance]);
+
   // Pot Odds Calculation
   const potOdds = useMemo(() => {
       if (toCall === 0) return 0;
@@ -140,6 +148,12 @@ export const GameControls: React.FC<GameControlsProps> = ({
             </div>
 
             <div className="max-w-md mx-auto space-y-3 w-full">
+                     <div className="flex justify-between items-center px-1">
+                          <span className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider">Action Info</span>
+                          <span className="text-[10px] md:text-xs text-gray-300 font-mono">
+                              To call: <span className="text-sol-green font-bold">{fmt(Math.min(toCall, userBalance))}</span> · Min raise to: <span className="text-sol-green font-bold">{fmt(minRaiseTo)}</span> · Stack: <span className="text-sol-green font-bold">{fmt(userBalance)}</span>
+                          </span>
+                     </div>
                  <div className="flex justify-between items-center px-1">
                       <span className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider">Your Stack</span>
                       <span className="text-sol-green font-mono font-bold text-sm shadow-black drop-shadow-sm">{fmt(userBalance)}</span>

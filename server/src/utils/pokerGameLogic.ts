@@ -58,6 +58,7 @@ export interface GameState {
   smallBlind: number;
   bigBlind: number;
   minBet: number;
+  lastRaiseAmount: number;
   deck: CardData[];
   fairness: FairnessState;
   winners?: { playerId: string; amount: number; handDescription?: string; name: string; cards: CardData[] }[];
@@ -109,6 +110,7 @@ export class PokerEngine {
       smallBlind,
       bigBlind,
       minBet: bigBlind,
+      lastRaiseAmount: bigBlind,
       deck: [],
       handNumber: 0,
       fairness: {
@@ -229,22 +231,51 @@ export class PokerEngine {
 
       // Dealer & Blinds Logic
       let nextDealerIndex = (state.dealerIndex + 1) % players.length;
-      while(players[nextDealerIndex].status !== 'active') {
+      let loopGuard = 0;
+      while(players[nextDealerIndex].status !== 'active' && loopGuard < players.length) {
           nextDealerIndex = (nextDealerIndex + 1) % players.length;
+          loopGuard++;
       }
       players[nextDealerIndex].isDealer = true;
 
-      // SB
-      let sbIndex = (nextDealerIndex + 1) % players.length;
-      while(players[sbIndex].status !== 'active') sbIndex = (sbIndex + 1) % players.length;
+      // HEADS-UP RULE: Dealer is Small Blind when only 2 players
+      let sbIndex, bbIndex, utgIndex;
       
-      // BB
-      let bbIndex = (sbIndex + 1) % players.length;
-      while(players[bbIndex].status !== 'active') bbIndex = (bbIndex + 1) % players.length;
+      if (activePlayers.length === 2) {
+          // Heads-up: Dealer posts SB, other player posts BB
+          sbIndex = nextDealerIndex;
+          bbIndex = (nextDealerIndex + 1) % players.length;
+          loopGuard = 0;
+          while(players[bbIndex].status !== 'active' && loopGuard < players.length) {
+              bbIndex = (bbIndex + 1) % players.length;
+              loopGuard++;
+          }
+          utgIndex = sbIndex; // Dealer acts first pre-flop in heads-up
+      } else {
+          // Standard: SB left of dealer
+          sbIndex = (nextDealerIndex + 1) % players.length;
+          loopGuard = 0;
+          while(players[sbIndex].status !== 'active' && loopGuard < players.length) {
+              sbIndex = (sbIndex + 1) % players.length;
+              loopGuard++;
+          }
+          
+          // BB left of SB
+          bbIndex = (sbIndex + 1) % players.length;
+          loopGuard = 0;
+          while(players[bbIndex].status !== 'active' && loopGuard < players.length) {
+              bbIndex = (bbIndex + 1) % players.length;
+              loopGuard++;
+          }
 
-      // UTG
-      let utgIndex = (bbIndex + 1) % players.length;
-      while(players[utgIndex].status !== 'active') utgIndex = (utgIndex + 1) % players.length;
+          // UTG left of BB
+          utgIndex = (bbIndex + 1) % players.length;
+          loopGuard = 0;
+          while(players[utgIndex].status !== 'active' && loopGuard < players.length) {
+              utgIndex = (utgIndex + 1) % players.length;
+              loopGuard++;
+          }
+      }
 
       // Post Blinds
       const sbAmt = Math.min(state.smallBlind, players[sbIndex].balance);
@@ -270,6 +301,7 @@ export class PokerEngine {
           currentTurnPlayerId: players[utgIndex].id,
           dealerIndex: nextDealerIndex,
           minBet: state.bigBlind,
+          lastRaiseAmount: state.bigBlind,
           deck,
           winners: undefined,
           lastHand,
@@ -311,9 +343,9 @@ export class PokerEngine {
               }
               break;
           case 'raise':
-              // Raise amount must exceed minimum raise
-              const minRaise = state.minBet + (state.minBet - (player.bet || 0));
-              if (amount < minRaise && player.balance > 0) {
+              // Raise amount must be at least current bet + last raise amount
+              const minRaise = state.minBet + state.lastRaiseAmount;
+              if (amount < minRaise && player.balance >= (minRaise - player.bet)) {
                   console.warn(`[PokerEngine] Invalid raise: ${amount} < minimum ${minRaise}`);
                   return state;
               }
@@ -323,6 +355,7 @@ export class PokerEngine {
       let newPlayers = [...state.players];
       let newPot = state.pot;
       let newMinBet = state.minBet;
+      let newLastRaiseAmount = state.lastRaiseAmount;
       let logMsg = '';
 
       switch (action) {
@@ -349,8 +382,9 @@ export class PokerEngine {
               logMsg = `${player.name} calls.`;
               break;
           case 'raise':
-              const raiseTo = Math.max(amount, state.minBet * 2);
+              const raiseTo = amount;
               const addedAmt = Math.min(raiseTo - player.bet, player.balance);
+              const previousMinBet = state.minBet;
               newPlayers[playerIndex] = {
                   ...player,
                   balance: safeMoney(player.balance - addedAmt, state.gameMode),
@@ -362,12 +396,41 @@ export class PokerEngine {
               };
               newPot += addedAmt;
               newMinBet = Math.max(newMinBet, player.bet + addedAmt);
+              newLastRaiseAmount = newMinBet - previousMinBet;
               logMsg = `${player.name} raises to ${newMinBet}.`;
               break;
       }
 
-      // Check if betting round is complete
+      // CRITICAL: Check if only one active player remains (all others folded)
       const activePlayers = newPlayers.filter(p => p.status === 'active' || p.status === 'all-in');
+      if (activePlayers.length === 1) {
+          console.log('[PokerEngine] Only 1 active player remains, awarding pot immediately');
+          // Award pot to last remaining player
+          const winner = activePlayers[0];
+          const winnerIndex = newPlayers.findIndex(p => p.id === winner.id);
+          newPlayers[winnerIndex] = {
+              ...newPlayers[winnerIndex],
+              balance: safeMoney(newPlayers[winnerIndex].balance + newPot, state.gameMode)
+          };
+
+          return {
+              ...state,
+              players: newPlayers,
+              pot: 0,
+              phase: 'showdown',
+              currentTurnPlayerId: null,
+              winners: [{
+                  playerId: winner.id,
+                  amount: newPot,
+                  name: winner.name,
+                  handDescription: 'Winner by fold',
+                  cards: winner.cards
+              }],
+              lastLog: `${winner.name} wins ${newPot} (all others folded)`
+          };
+      }
+
+      // Check if betting round is complete
       const allMatched = activePlayers.every(p => p.bet === newMinBet || p.status === 'all-in' || p.status === 'folded');
       const allActed = activePlayers.every(p => p.lastAction !== undefined || p.status === 'all-in');
 
@@ -385,10 +448,17 @@ export class PokerEngine {
 
       // Pass turn
       let nextIndex = (playerIndex + 1) % newPlayers.length;
-      while(newPlayers[nextIndex].status !== 'active') {
+      let loopGuard = 0;
+      while(newPlayers[nextIndex].status !== 'active' && loopGuard < newPlayers.length) {
           nextIndex = (nextIndex + 1) % newPlayers.length;
-          // Loop guard omitted for brevity in snippet
+          loopGuard++;
       }
+      
+      if (loopGuard >= newPlayers.length) {
+          console.error('[PokerEngine] No active players found for next turn!');
+          return state; // Return unchanged state to prevent crash
+      }
+      
       newPlayers[nextIndex].isTurn = true;
 
       return {
@@ -396,6 +466,7 @@ export class PokerEngine {
           players: newPlayers,
           pot: safeMoney(newPot, state.gameMode),
           minBet: newMinBet,
+          lastRaiseAmount: action === 'raise' ? newLastRaiseAmount : state.lastRaiseAmount,
           currentTurnPlayerId: newPlayers[nextIndex].id,
           lastLog: logMsg
       };
@@ -437,9 +508,17 @@ export class PokerEngine {
 
       // Find first active player left of dealer
       let nextIndex = (state.dealerIndex + 1) % players.length;
-      while(players[nextIndex].status !== 'active') {
+      let loopGuard = 0;
+      while(players[nextIndex].status !== 'active' && loopGuard < players.length) {
           nextIndex = (nextIndex + 1) % players.length;
+          loopGuard++;
       }
+      
+      if (loopGuard >= players.length) {
+          console.error('[PokerEngine] No active players in advancePhase!');
+          return this.determineWinner({ ...state, communityCards: newCommunityCards });
+      }
+      
       players[nextIndex].isTurn = true;
 
       return {
@@ -449,31 +528,89 @@ export class PokerEngine {
           communityCards: newCommunityCards,
           players,
           minBet: 0,
+          lastRaiseAmount: 0,
           currentTurnPlayerId: players[nextIndex].id,
           lastLog: msg
       };
   }
 
   static determineWinner(state: GameState): GameState {
-      // Simplified Winner Determination
-      // In production, this uses evaluateHand from handEvaluator
       const players = state.players;
-      const activeCandidates = players.filter(p => p.status !== 'folded' && p.status !== 'sitting-out');
+      const activeCandidates = players.filter(p => p.status !== 'folded' && p.status !== 'sitting-out' && p.status !== 'eliminated');
 
+      if (activeCandidates.length === 0) {
+          console.error('[PokerEngine] No active candidates for winner determination!');
+          return { ...state, phase: 'showdown', pot: 0 };
+      }
+
+      // Evaluate all hands
       activeCandidates.forEach(p => {
           p.handResult = evaluateHand([...p.cards, ...state.communityCards]);
       });
 
-      // Simple winner sort (highest score)
-      activeCandidates.sort((a, b) => (b.handResult?.score || 0) - (a.handResult?.score || 0));
+      // Create side pots based on all-in amounts
+      const sidePots = this.calculateSidePots(activeCandidates);
       
-      const winner = activeCandidates[0];
-      const winAmount = state.pot;
+      const winners: { playerId: string; amount: number; handDescription?: string; name: string; cards: CardData[] }[] = [];
+      let totalAwarded = 0;
+      let logMessages: string[] = [];
 
-      // Award Pot
+      // Award each pot to eligible winners
+      sidePots.forEach((pot, index) => {
+          const eligible = activeCandidates.filter(p => pot.eligiblePlayerIds.includes(p.id));
+          eligible.sort((a, b) => (b.handResult?.score || 0) - (a.handResult?.score || 0));
+          
+          const topScore = eligible[0].handResult?.score || 0;
+          const potWinners = eligible.filter(p => p.handResult?.score === topScore);
+          
+          // Calculate rake (only for main pot in cash games)
+          let rake = 0;
+          if (index === 0 && state.gameMode === 'cash') {
+              rake = this.calculateRake(pot.amount, state);
+          }
+          
+          const netPot = pot.amount - rake;
+          const splitAmount = safeMoney(netPot / potWinners.length, state.gameMode);
+          
+          potWinners.forEach(w => {
+              const existingWinner = winners.find(win => win.playerId === w.id);
+              if (existingWinner) {
+                  existingWinner.amount = safeMoney(existingWinner.amount + splitAmount, state.gameMode);
+              } else {
+                  winners.push({
+                      playerId: w.id,
+                      amount: splitAmount,
+                      name: w.name,
+                      handDescription: w.handResult?.name,
+                      cards: w.cards
+                  });
+              }
+              totalAwarded += splitAmount;
+          });
+          
+          if (potWinners.length === 1) {
+              const potType = index === 0 ? 'main pot' : `side pot ${index}`;
+              logMessages.push(`${potWinners[0].name} wins ${potType} $${splitAmount.toLocaleString()} with ${potWinners[0].handResult?.name}`);
+          } else {
+              const potType = index === 0 ? 'main pot' : `side pot ${index}`;
+              const names = potWinners.map(w => w.name).join(', ');
+              logMessages.push(`${names} split ${potType} ($${splitAmount.toLocaleString()} each)`);
+          }
+          
+          if (rake > 0) {
+              logMessages.push(`Rake: $${rake.toFixed(2)}`);
+          }
+      });
+
+      // Award winnings to players
       const newPlayers = players.map(p => {
-          if (p.id === winner.id) {
-              return { ...p, balance: safeMoney(p.balance + winAmount, state.gameMode), winningHand: winner.handResult?.winningCards };
+          const winner = winners.find(w => w.playerId === p.id);
+          if (winner) {
+              return { 
+                  ...p, 
+                  balance: safeMoney(p.balance + winner.amount, state.gameMode),
+                  winningHand: p.handResult?.winningCards
+              };
           }
           return p;
       });
@@ -483,15 +620,63 @@ export class PokerEngine {
           players: newPlayers,
           phase: 'showdown',
           pot: 0,
-          winners: [{
-              playerId: winner.id,
-              amount: winAmount,
-              name: winner.name,
-              handDescription: winner.handResult?.name,
-              cards: winner.cards
-          }],
-          lastLog: `${winner.name} wins $${winAmount} with ${winner.handResult?.name}!`
+          winners,
+          lastLog: logMessages.join(' | ')
       };
+  }
+
+  static calculateSidePots(players: PlayerState[]): { amount: number; eligiblePlayerIds: string[] }[] {
+      const pots: { amount: number; eligiblePlayerIds: string[] }[] = [];
+      
+      // Sort players by totalBet (all-in amounts)
+      const sorted = [...players].sort((a, b) => a.totalBet - b.totalBet);
+      
+      let previousBet = 0;
+      
+      sorted.forEach((player, index) => {
+          const betForThisPot = player.totalBet - previousBet;
+          
+          if (betForThisPot > 0) {
+              // All players from this index onward are eligible
+              const eligiblePlayerIds = sorted.slice(index).map(p => p.id);
+              
+              // Calculate pot amount: betForThisPot * number of eligible players
+              const potAmount = betForThisPot * eligiblePlayerIds.length;
+              
+              pots.push({
+                  amount: potAmount,
+                  eligiblePlayerIds
+              });
+              
+              previousBet = player.totalBet;
+          }
+      });
+      
+      return pots;
+  }
+
+  static calculateRake(potAmount: number, state: GameState): number {
+      if (state.gameMode !== 'cash' || potAmount === 0) return 0;
+      
+      // VIP levels from constants (simplified - in production, fetch from user record)
+      // Fish: 5%, cap $5 | Grinder: 4.5%, cap $4.50 | Shark: 4%, cap $4 | High Roller: 3.5%, cap $3.50 | Legend: 3%, cap $3
+      const VIP_LEVELS = [
+          { minHands: 0, rate: 0.05, cap: 5 },
+          { minHands: 1000, rate: 0.045, cap: 4.5 },
+          { minHands: 5000, rate: 0.04, cap: 4 },
+          { minHands: 20000, rate: 0.035, cap: 3.5 },
+          { minHands: 100000, rate: 0.03, cap: 3 }
+      ];
+      
+      // Use default rake (assume Fish level if no hands data available)
+      // In production, pass player hands data to calculate actual VIP level
+      const rakeRate = VIP_LEVELS[0].rate; // Default to 5%
+      const rakeCap = state.rakeCap || VIP_LEVELS[0].cap; // Use table rakeCap or default
+      
+      const calculatedRake = potAmount * rakeRate;
+      const finalRake = Math.min(calculatedRake, rakeCap);
+      
+      return safeMoney(finalRake, state.gameMode);
   }
 
   static toggleSitOut(state: GameState, playerId: string): GameState {

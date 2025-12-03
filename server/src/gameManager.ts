@@ -39,6 +39,8 @@ export class GameManager {
     }
 
     public async handleJoin(socket: Socket, tableId: string, user: any, config?: any) {
+        const DEBUG = process.env.NODE_ENV === 'development';
+        if (DEBUG) console.log(`[handleJoin] User: ${user?.id}, Table: ${tableId}`);
         let table = this.tables.get(tableId);
         
         if (!table) {
@@ -47,40 +49,51 @@ export class GameManager {
             const sb = Number(config?.smallBlind) || 1;
             const bb = Number(config?.bigBlind) || 2;
             const mode = config?.gameMode || 'cash';
-            
             table = PokerEngine.initializeGame(tableId, seats, sb, bb, mode);
             this.tables.set(tableId, table);
+            if (DEBUG) console.log(`[handleJoin] Created new table ${tableId}`);
         }
 
         socket.join(tableId);
+        if (DEBUG) console.log(`[handleJoin] Socket ${socket.id} joined room ${tableId}`);
+        console.log(`[handleJoin] Socket ${socket.id} joined room ${tableId}`);
 
         // Fetch User and send balance
         if (user && user.id && user.id !== 'spectator') {
             try {
+                if (DEBUG) console.log(`[handleJoin] Fetching DB user: ${user.id}`);
                 let dbUser = await db.user.findUnique({ where: { id: user.id } });
                 if (!dbUser) {
+                    if (DEBUG) console.log(`[handleJoin] Creating new user: ${user.id}`);
                     dbUser = await db.user.create({
                         data: {
                             id: user.id,
+                            walletAddress: user.id, // Set walletAddress same as id
                             username: user.username || `Player_${user.id.slice(0,4)}`,
                             avatarUrl: user.avatarUrl,
                             balance: 10000 // Welcome Bonus
                         }
                     });
                 }
+                if (DEBUG) console.log(`[handleJoin] Sending balance: ${dbUser.balance}`);
                 socket.emit('balanceUpdate', dbUser.balance);
-            } catch(e) { console.error(e); }
+            } catch(e) { 
+                console.error('[handleJoin] DB Error:', e); 
+            }
         }
 
         // Reconnection logic
         const existingPlayer = table.players.find(p => p.id === user?.id);
         if (existingPlayer) {
+            if (DEBUG) console.log(`[handleJoin] Existing player reconnecting`);
             const updatedTable = PokerEngine.updatePlayerSocket(table, user.id, socket.id);
             this.tables.set(tableId, updatedTable);
             socket.emit('gameStateUpdate', updatedTable);
         } else {
+            if (DEBUG) console.log(`[handleJoin] New spectator, sending game state`);
             socket.emit('gameStateUpdate', table);
         }
+        if (DEBUG) console.log(`[handleJoin] Completed for ${user?.id || 'spectator'}`);
     }
 
     public async handleSit(socket: Socket, tableId: string, user: any, amount: number, seatIndex?: number) {
@@ -101,7 +114,7 @@ export class GameManager {
             // Note: Blockchain balance verification is handled client-side
 
             // DB Transaction - Deduct buy-in from off-chain balance
-            await db.$transaction([
+            const [updatedUser] = await db.$transaction([
                 db.user.update({
                     where: { id: user.id },
                     data: { balance: { decrement: amount } }
@@ -115,9 +128,8 @@ export class GameManager {
                     }
                 })
             ]);
-
-            const updatedUser = await db.user.findUnique({ where: { id: user.id } });
-            if(updatedUser) socket.emit('balanceUpdate', updatedUser.balance);
+            
+            socket.emit('balanceUpdate', updatedUser.balance);
 
         } catch (e) {
             return socket.emit('error', { message: 'Transaction failed' });
@@ -139,7 +151,7 @@ export class GameManager {
         const activePlayers = updatedTable.players.filter((p: any) => p.status !== 'sitting-out' && p.balance > 0);
         if (activePlayers.length >= 2 && updatedTable.currentTurnPlayerId === null && updatedTable.communityCards.length === 0) {
             console.log(`[GameManager] Auto-starting game on table ${tableId} with ${activePlayers.length} players`);
-            setTimeout(() => {
+            setTimeout(async () => {
                 const currentTable = this.tables.get(tableId);
                 if (currentTable) {
                     // Generate fairness seeds and deck
@@ -166,14 +178,22 @@ export class GameManager {
     }
 
     public handleAction(socket: Socket, tableId: string, action: any, amount: number) {
+        const DEBUG = process.env.NODE_ENV === 'development';
         const table = this.tables.get(tableId);
         if (!table) return;
 
         const player = table.players.find((p: any) => p.socketId === socket.id);
         if (player) {
+            if (DEBUG) console.log(`[Action] ${player.name} at table ${tableId}: ${action} ${amount || ''}`);
+            
             let newState = PokerEngine.handleAction(table, player.id, action, amount);
+            
+            if (DEBUG) console.log(`[State] After action - Phase: ${newState.phase}, CurrentTurn: ${newState.currentTurnPlayerId}`);
             if (newState.currentTurnPlayerId === null) {
+                if (DEBUG) console.log('[GameFlow] Betting round complete, advancing phase...');
                 newState = PokerEngine.advancePhase(newState);
+                if (DEBUG) console.log(`[GameFlow] Advanced to phase: ${newState.phase}, new turn: ${newState.currentTurnPlayerId}`);
+                console.log(`[GameFlow] Advanced to phase: ${newState.phase}, new turn: ${newState.currentTurnPlayerId}`);
             }
             
             // Handle Winners -> DB Update AND Hand History
@@ -235,7 +255,7 @@ export class GameManager {
                     if (t) {
                         try {
                             const serverSeed = generateServerSeed();
-                            const serverHash = await hashSeed(serverSeed);  // ✅ FIXED: Added await
+                            const serverHash = hashSeed(serverSeed);
                             const clientSeed = t.fairness?.clientSeed || `client_${Date.now()}`;
                             const nonce = (t.handNumber || 0) + 1;
 
@@ -255,6 +275,7 @@ export class GameManager {
                             const nextState = PokerEngine.dealHand(t, deck, newFairness);
                             this.tables.set(tableId, nextState);
                             this.broadcastState(tableId);
+                            console.log(`[GameFlow] Next hand dealt for table ${tableId}`);
                         } catch (e) {
                             console.error('Error generating next hand deck', e);
                         }

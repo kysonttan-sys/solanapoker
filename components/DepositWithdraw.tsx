@@ -37,7 +37,6 @@ export const DepositWithdraw: React.FC<{ isOpen: boolean; onClose: () => void }>
         });
     }, [connected, publicKey, wallet]);
 
-    // Fetch player balance and on-chain balance on mount
     useEffect(() => {
         if (!isOpen || !publicKey) return;
         

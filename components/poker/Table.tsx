@@ -125,6 +125,33 @@ export const Table: React.FC<TableProps> = ({ gameState, heroId, timeLeft, total
         }`}
         style={!isVertical ? { transform: `scale(${scale})` } : {}}
     >
+      {/* Fairness Verification */}
+      {gameState?.phase === 'showdown' && (
+        <div className="absolute top-2 right-2 bg-black/60 border border-white/10 rounded-lg px-3 py-2 flex items-center gap-2">
+          <span className="text-xs text-gray-300">Hand #{gameState?.handNumber} complete</span>
+          <button
+            className="text-xs px-2 py-1 rounded bg-sol-green/20 text-sol-green border border-sol-green/40 hover:bg-sol-green/30"
+            onClick={() => onVerify?.(gameState?.tableId, gameState?.handNumber)}
+            title="Verify this hand's provable fairness"
+          >
+            Verify Hand
+          </button>
+        </div>
+      )}
+      
+      {/* Rake & VIP Info at Showdown */}
+      {gameState?.phase === 'showdown' && gameState?.winners && (
+        <div className="absolute top-16 right-2 bg-black/80 border border-white/10 rounded-lg px-3 py-2 text-[10px] space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400">Rake:</span>
+            <span className="text-sol-purple font-mono">~3-5%</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400">VIP Tier:</span>
+            <span className="text-sol-green font-bold">Fish 🐟</span>
+          </div>
+        </div>
+      )}
       <div className={`absolute inset-0 bg-[#1a4731] shadow-[inset_0_0_50px_rgba(0,0,0,0.8)] border-[12px] border-[#2c2e3a] ${
           isVertical ? 'rounded-[160px] md:rounded-[240px]' : 'rounded-[200px]'
       }`}>

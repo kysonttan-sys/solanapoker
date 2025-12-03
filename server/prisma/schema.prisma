@@ -18,12 +18,14 @@ model SystemState {
   totalVolume   Float    @default(0)
   totalHands    Int      @default(0)  // Added for Issue #2
   activePlayers Int      @default(0)
+  communityPool Float    @default(0)  // Community/Global Partner Pool
   updatedAt     DateTime @updatedAt
 }
 
 // User Accounts (Wallet-based)
 model User {
   id              String        @id // Wallet address
+  walletAddress   String        @unique // Explicit wallet field for easier access
   username        String        @unique
   email           String?       @unique
   avatarUrl       String?
@@ -37,6 +39,7 @@ model User {
   referredBy      String?       // Who referred this user (referral code)
   referralRank    Int           @default(0) // 0=Scout, 1=Agent, 2=Broker, 3=Partner
   hostRank        Int           @default(0) // 0=Dealer to 4=Mogul
+  hostEarnings    Float         @default(0) // Lifetime host revenue earnings
   
   // Blockchain Sync Fields
   onChainBalance  Float         @default(0)     // On-chain SOL/token balance
@@ -51,6 +54,7 @@ model User {
   updatedAt       DateTime      @updatedAt
   
   @@index([username])
+  @@index([walletAddress])
   @@index([totalWinnings])
   @@index([walletVerified])
 }

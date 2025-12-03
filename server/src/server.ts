@@ -149,6 +149,7 @@ app.get('/api/user/:id', async (req, res) => {
             const newUser = await db.user.create({
                 data: {
                     id: req.params.id,
+                    walletAddress: req.params.id,
                     username: `Player_${req.params.id.slice(0,4)}`,
                     avatarUrl: `https://ui-avatars.com/api/?name=${req.params.id}`,
                     balance: 0 // Start with 0 real funds
@@ -354,15 +355,32 @@ io.on('connection', (socket) => {
     console.log(`[Connect] User connected: ${socket.id}`);
 
     socket.on('joinTable', ({ tableId, user, config }) => {
-        gameManager.handleJoin(socket, tableId, user, config);
+        try {
+            console.log(`[JoinTable] ${socket.id} joining ${tableId}`);
+            gameManager.handleJoin(socket, tableId, user, config);
+        } catch (e) {
+            console.error('[JoinTable Error]', e);
+            socket.emit('error', { message: 'Failed to join table' });
+        }
     });
 
     socket.on('sitDown', ({ tableId, user, amount, seatIndex }) => {
-        gameManager.handleSit(socket, tableId, user, amount, seatIndex);
+        try {
+            console.log(`[SitDown] ${user.username} at table ${tableId}`);
+            gameManager.handleSit(socket, tableId, user, amount, seatIndex);
+        } catch (e) {
+            console.error('[SitDown Error]', e);
+            socket.emit('error', { message: 'Failed to sit down' });
+        }
     });
 
     socket.on('playerAction', ({ tableId, action, amount }) => {
-        gameManager.handleAction(socket, tableId, action, amount);
+        try {
+            gameManager.handleAction(socket, tableId, action, amount);
+        } catch (e) {
+            console.error('[PlayerAction Error]', e);
+            socket.emit('error', { message: 'Action failed' });
+        }
     });
 
     socket.on('sendChatMessage', ({ tableId, message, user }) => {
@@ -401,13 +419,13 @@ io.on('connection', (socket) => {
     socket.on('depositCompleted', async ({ txHash, amount, walletAddress }) => {
         try {
             console.log(`[Deposit] Processing deposit: ${amount} chips for ${walletAddress}`);
-            
             // Find or create user
             let user = await db.user.findUnique({ where: { id: walletAddress } });
             if (!user) {
                 user = await db.user.create({
                     data: {
                         id: walletAddress,
+                        walletAddress: walletAddress,
                         username: `Player_${walletAddress.slice(0,4)}`,
                         balance: 0
                     }

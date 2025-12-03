@@ -30,7 +30,7 @@ type JoinPhase = 'idle' | 'verifying' | 'buying-in' | 'joining';
 export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, onVerify, onBalanceUpdate }) => {
   const { tableId } = useParams<{ tableId: string }>();
   const navigate = useNavigate();
-  const { socket, isConnected } = useSocket();
+  const { socket, isConnected, status } = useSocket();
 
   // --- GAME DATA ---
   const tableData = tables.find(t => t.id === tableId);
@@ -248,10 +248,12 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
                         <span className="text-[10px] text-gray-400 font-mono bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
                             {gameState.gameMode === 'cash' ? `$${gameState.smallBlind}/$${gameState.bigBlind}` : `Level ${gameState.tournamentDetails?.level}`}
                         </span>
-                        {isConnected ? (
+                        {status === 'connected' ? (
                             <span className="flex items-center gap-1 text-[10px] text-green-500 font-bold"><Wifi size={8}/> Live</span>
+                        ) : status === 'connecting' ? (
+                            <span className="flex items-center gap-1 text-[10px] text-yellow-500 font-bold"><Loader2 size={8} className="animate-spin"/> Connecting</span>
                         ) : (
-                            <span className="flex items-center gap-1 text-[10px] text-red-500 font-bold"><WifiOff size={8}/> Reconnecting</span>
+                            <span className="flex items-center gap-1 text-[10px] text-red-500 font-bold"><WifiOff size={8}/> Disconnected</span>
                         )}
                     </div>
                 </div>

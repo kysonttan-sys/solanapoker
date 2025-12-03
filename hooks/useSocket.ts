@@ -21,6 +21,8 @@ const SERVER_URL = getServerUrl();
 export const useSocket = () => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  let retries = 0;
 
   useEffect(() => {
     const socketInstance = io(SERVER_URL, {
@@ -31,16 +33,26 @@ export const useSocket = () => {
     socketInstance.on('connect', () => {
       console.log('✅ Connected to Game Server:', socketInstance.id);
       setIsConnected(true);
+      setStatus('connected');
+      retries = 0;
     });
 
     socketInstance.on('disconnect', () => {
       console.log('❌ Disconnected from Game Server');
       setIsConnected(false);
+      setStatus('disconnected');
     });
 
     socketInstance.on('connect_error', (err) => {
       console.error('❌ Connection Error:', err);
       console.error('Trying to connect to:', SERVER_URL);
+      setStatus('disconnected');
+      const delay = Math.min(5000, 500 * (retries + 1));
+      retries += 1;
+      setTimeout(() => {
+        setStatus('connecting');
+        socketInstance.connect();
+      }, delay);
     });
 
     setSocket(socketInstance);
@@ -50,5 +62,5 @@ export const useSocket = () => {
     };
   }, []);
 
-  return { socket, isConnected };
+  return { socket, isConnected, status };
 };

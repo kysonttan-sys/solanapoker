@@ -19,6 +19,8 @@ export const BuyInModal: React.FC<BuyInModalProps> = ({ isOpen, onClose, onConfi
   const effectiveMax = Math.min(max, balance);
   const [amount, setAmount] = useState(min);
   const isFixedBuyIn = min === max;
+  const isValid = amount >= min && amount <= effectiveMax;
+  const snappedAmount = Math.min(Math.max(amount, min), effectiveMax);
 
   useEffect(() => {
     if (isOpen) {
@@ -38,7 +40,7 @@ export const BuyInModal: React.FC<BuyInModalProps> = ({ isOpen, onClose, onConfi
 
   const handleConfirm = (e: React.FormEvent) => {
     e.preventDefault();
-    onConfirm(amount);
+    onConfirm(snappedAmount);
   };
 
   if (!isOpen) return null;
@@ -97,7 +99,7 @@ export const BuyInModal: React.FC<BuyInModalProps> = ({ isOpen, onClose, onConfi
                             variant="outline" 
                             size="sm" 
                             className="flex-1 text-xs"
-                            onClick={() => setAmount(min)}
+                            onClick={() => setAmount(snappedAmount)}
                             disabled={isDepositing}
                         >
                             Min
