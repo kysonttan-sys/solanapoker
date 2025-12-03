@@ -1,0 +1,64 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// System-wide state tracking
+model SystemState {
+  id            String   @id @default("global")
+  jackpot       Float    @default(0)
+  tvl           Float    @default(0)
+  totalVolume   Float    @default(0)
+  activePlayers Int      @default(0)
+  updatedAt     DateTime @updatedAt
+}
+
+// User Accounts (Wallet-based)
+model User {
+  id              String        @id // Wallet address
+  username        String        @unique
+  email           String?       @unique
+  avatarUrl       String?
+  bio             String?
+  balance         Float         @default(0)
+  totalWinnings   Float         @default(0)
+  totalHands      Int           @default(0)
+  vipRank         Int           @default(0) // 0=None, 1-3=VIP levels
+  isVerified      Boolean       @default(false)
+  referralCode    String?       @unique
+  referralRank    Int           @default(0) // 0=Scout, 1=Agent, 2=Broker, 3=Partner
+  hostRank        Int           @default(0) // 0=Dealer to 4=Mogul
+  
+  // Relationships
+  transactions    Transaction[]
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@index([username])
+  @@index([totalWinnings])
+}
+
+// Transaction Log
+model Transaction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type      String   // GAME_BUYIN, GAME_WIN, WITHDRAWAL, DEPOSIT, STAKING, etc.
+  amount    Float
+  status    String   @default("COMPLETED") // COMPLETED, PENDING, FAILED
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([createdAt])
+}

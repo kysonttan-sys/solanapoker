@@ -1,0 +1,137 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;700&display=swap');
+
+/* --- Connect Button Overrides --- */
+.wallet-adapter-button {
+    font-family: 'Inter', sans-serif !important;
+    background: linear-gradient(135deg, #00FFAE 0%, #1D8BFF 100%) !important;
+    color: #0B0B0F !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    height: 44px !important;
+    border-radius: 0.75rem !important; /* rounded-xl */
+    padding: 0 24px !important;
+    transition: all 0.3s ease !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    border: none !important;
+}
+
+.wallet-adapter-button:not([disabled]):hover {
+    background: linear-gradient(135deg, #00FFAE 20%, #1D8BFF 120%) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 0 20px rgba(0, 255, 174, 0.4) !important;
+}
+
+.wallet-adapter-button-start-icon {
+    margin-right: 10px !important;
+}
+
+/* --- Modal Overlay Overrides --- */
+.wallet-adapter-modal-wrapper {
+    background-color: #13131F !important; /* sol-dark */
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 1.5rem !important;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 255, 174, 0.1) !important;
+    font-family: 'Inter', sans-serif !important;
+    width: 360px !important;
+    max-width: 90vw !important;
+}
+
+.wallet-adapter-modal-title {
+    color: #fff !important;
+    font-size: 1.25rem !important;
+    font-weight: 700 !important;
+    text-align: center !important;
+    padding: 16px 0 !important;
+    letter-spacing: -0.02em;
+}
+
+.wallet-adapter-modal-button-close {
+    background-color: #1F1F2E !important;
+    border-radius: 50% !important;
+    padding: 8px !important;
+    width: 32px !important;
+    height: 32px !important;
+    top: 16px !important;
+    right: 16px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.wallet-adapter-modal-button-close svg {
+    width: 14px !important;
+    height: 14px !important;
+    fill: #888 !important;
+}
+
+.wallet-adapter-modal-button-close:hover {
+    background-color: rgba(239, 68, 68, 0.2) !important;
+}
+.wallet-adapter-modal-button-close:hover svg {
+    fill: #ef4444 !important;
+}
+
+/* --- Wallet Option Buttons --- */
+.wallet-adapter-modal-list {
+    margin: 0 !important;
+    padding: 0 16px 24px 16px !important;
+    gap: 12px !important;
+}
+
+.wallet-adapter-modal-list li {
+    margin: 0 !important;
+}
+
+.wallet-adapter-modal-list .wallet-adapter-button {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 1rem !important;
+    color: #fff !important;
+    font-weight: 600 !important;
+    justify-content: space-between !important;
+    height: 64px !important;
+    width: 100% !important;
+    padding: 0 20px !important;
+    font-size: 1.1rem !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+}
+
+.wallet-adapter-modal-list .wallet-adapter-button:hover {
+    background: rgba(0, 255, 174, 0.05) !important;
+    border-color: #00FFAE !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.wallet-adapter-modal-list .wallet-adapter-button span {
+    margin-left: 0 !important;
+}
+
+.wallet-adapter-modal-list .wallet-adapter-button-end-icon,
+.wallet-adapter-modal-list .wallet-adapter-button-start-icon {
+    width: 32px !important;
+    height: 32px !important;
+}
+
+/* "Detected" badge styling if applicable */
+.wallet-adapter-modal-list .wallet-adapter-button i {
+    font-style: normal;
+    font-size: 0.75rem;
+    background: rgba(0, 255, 174, 0.1);
+    color: #00FFAE;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 10px;
+}
+
+/* More options text */
+.wallet-adapter-modal-list-more {
+    color: #8A42FF !important; /* sol-purple */
+    font-weight: 600 !important;
+}
+.wallet-adapter-modal-list-more svg {
+    fill: #8A42FF !important;
+}

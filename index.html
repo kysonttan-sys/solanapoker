@@ -1,0 +1,84 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SOLPOKER X</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Solana Wallet Adapter CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@solana/wallet-adapter-react-ui@0.9.35/styles.css">
+    <script>
+      // POLYFILLS FOR SOLANA WEB3.JS - CRITICAL FOR BROWSER SUPPORT
+      window.global = window;
+      window.process = {
+        env: { DEBUG: undefined },
+        version: '',
+        nextTick: function(cb) { setTimeout(cb, 0) }
+      };
+    </script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              sol: {
+                green: '#00FFAE',
+                purple: '#8A42FF',
+                blue: '#1D8BFF',
+                black: '#0B0B0F',
+                dark: '#13131F',
+                gray: '#1F1F2E'
+              }
+            },
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            },
+            backgroundImage: {
+              'hero-gradient': 'linear-gradient(135deg, rgba(11,11,15,1) 0%, rgba(29,139,255,0.1) 50%, rgba(0,255,174,0.05) 100%)',
+              'glass': 'linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%)'
+            }
+          }
+        }
+      }
+    </script>
+    <!-- REMOVED IMPORT MAP FOR LOCALHOST -->
+<link rel="stylesheet" href="/index.css">
+<script type="importmap">
+{
+  "imports": {
+    "@solana/wallet-adapter-react-ui": "https://aistudiocdn.com/@solana/wallet-adapter-react-ui@^0.9.39",
+    "@solana/wallet-adapter-react": "https://aistudiocdn.com/@solana/wallet-adapter-react@^0.15.39",
+    "vite-plugin-node-polyfills": "https://aistudiocdn.com/vite-plugin-node-polyfills@^0.24.0",
+    "@solana/wallet-adapter-base": "https://aistudiocdn.com/@solana/wallet-adapter-base@^0.9.27",
+    "@solana/wallet-adapter-wallets": "https://aistudiocdn.com/@solana/wallet-adapter-wallets@^0.19.37",
+    "@solana/web3.js": "https://aistudiocdn.com/@solana/web3.js@^1.98.4",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "vite": "https://aistudiocdn.com/vite@^7.2.6",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "path": "https://aistudiocdn.com/path@^0.12.7",
+    "url": "https://aistudiocdn.com/url@^0.11.4",
+    "buffer": "https://aistudiocdn.com/buffer@^6.0.3",
+    "@solana/wallet-adapter-walletconnect": "https://aistudiocdn.com/@solana/wallet-adapter-walletconnect@^0.1.21",
+    "http": "https://aistudiocdn.com/http@^0.0.1-security",
+    "express": "https://aistudiocdn.com/express@^5.2.1",
+    "socket.io": "https://aistudiocdn.com/socket.io@^4.8.1",
+    "cors": "https://aistudiocdn.com/cors@^2.8.5",
+    "socket.io-client": "https://aistudiocdn.com/socket.io-client@^4.8.1",
+    "@prisma/client": "https://aistudiocdn.com/@prisma/client@^7.0.1"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
