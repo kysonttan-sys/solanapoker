@@ -69,6 +69,7 @@ export const evaluateHand = (allCards: CardData[]): HandResult => {
 
       if (uniqueRankCards.length < 5) return null;
 
+      // Standard straights (non-wheel)
       for (let i = 0; i <= uniqueRankCards.length - 5; i++) {
           const v1 = RANK_VALUE[uniqueRankCards[i].rank];
           const v2 = RANK_VALUE[uniqueRankCards[i+4].rank];
@@ -77,11 +78,21 @@ export const evaluateHand = (allCards: CardData[]): HandResult => {
           }
       }
 
-      // Check Wheel (A-2-3-4-5)
+      // Check Wheel (A-2-3-4-5) - Ace counts as LOW here
       const hasAce = uniqueRankCards[0].rank === 'A';
       if (hasAce) {
-          const wheelCards = uniqueRankCards.filter(c => ['5','4','3','2'].includes(c.rank));
-          if (wheelCards.length === 4) {
+          const wheelRanks = ['5','4','3','2'];
+          const wheelCards: CardData[] = [];
+          let hasAllWheelCards = true;
+          
+          for (const rank of wheelRanks) {
+              const card = uniqueRankCards.find(c => c.rank === rank);
+              if (card) wheelCards.push(card);
+              else { hasAllWheelCards = false; break; }
+          }
+          
+          if (hasAllWheelCards) {
+              // Return wheel in correct order: 5-4-3-2-A (with A as lowest)
               return [...wheelCards, uniqueRankCards[0]];
           }
       }

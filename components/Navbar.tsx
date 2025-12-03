@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, User as UserIcon, LogOut, Trophy, PlusCircle, Grid, Layers, RefreshCw, Lock, Wallet } from 'lucide-react';
+import { Menu, X, User as UserIcon, LogOut, Trophy, PlusCircle, Grid, Layers, RefreshCw, Lock, Wallet, ArrowDownUp } from 'lucide-react';
 import { Button } from './ui/Button';
 import { User } from '../types';
 import { getVipStatus, ADMIN_WALLET_ADDRESS } from '../constants';
@@ -9,9 +9,10 @@ import { useWallet } from '@solana/wallet-adapter-react';
 interface NavbarProps {
   user: User | null;
   onOpenWalletModal: () => void;
+  onOpenDepositWithdraw?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ user, onOpenWalletModal }) => {
+export const Navbar: React.FC<NavbarProps> = ({ user, onOpenWalletModal, onOpenDepositWithdraw }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
   const { connected, disconnect, publicKey } = useWallet();
@@ -22,6 +23,7 @@ export const Navbar: React.FC<NavbarProps> = ({ user, onOpenWalletModal }) => {
     { name: 'Staking', path: '/staking', icon: <Layers size={18} /> },
     { name: 'Swap', path: '/swap', icon: <RefreshCw size={18} /> },
     { name: 'Leaderboard', path: '/leaderboard', icon: <Trophy size={18} /> },
+    { name: 'Fairness', path: '/fairness', icon: <Lock size={18} /> },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -33,10 +35,10 @@ export const Navbar: React.FC<NavbarProps> = ({ user, onOpenWalletModal }) => {
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-white/10 bg-sol-black/80 backdrop-blur-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-20 items-center">
+        <div className="flex justify-between h-20 items-center gap-4">
           
           {/* Logo */}
-          <div className="flex-shrink-0 flex items-center cursor-pointer group">
+          <div className="flex-shrink-0 flex items-center cursor-pointer group min-w-[180px]">
              <Link to="/" className="flex items-center gap-1.5">
                 {/* Text Part */}
                 <span className="font-bold text-2xl md:text-3xl tracking-tight text-[#00FFAE]" style={{ fontFamily: 'Inter, sans-serif' }}>
@@ -69,12 +71,12 @@ export const Navbar: React.FC<NavbarProps> = ({ user, onOpenWalletModal }) => {
           </div>
 
           {/* Desktop Nav */}
-          <div className="hidden lg:flex items-center space-x-8">
+          <div className="hidden lg:flex items-center justify-center flex-1 space-x-6">
             {navLinks.map((link) => (
               <Link
                 key={link.name}
                 to={link.path}
-                className={`flex items-center gap-2 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2 text-sm font-medium transition-colors whitespace-nowrap ${
                   isActive(link.path) 
                     ? 'text-sol-green' 
                     : 'text-gray-400 hover:text-white'
@@ -84,24 +86,19 @@ export const Navbar: React.FC<NavbarProps> = ({ user, onOpenWalletModal }) => {
                 {link.name}
               </Link>
             ))}
-            {isAdmin && (
-                <Link
-                    to="/admin"
-                    className={`flex items-center gap-2 text-sm font-bold uppercase transition-colors px-3 py-1 rounded border ${
-                    isActive('/admin') 
-                        ? 'text-red-500 border-red-500 bg-red-500/10' 
-                        : 'text-gray-400 border-gray-600 hover:text-white hover:border-white'
-                    }`}
-                >
-                    <Lock size={14} /> Admin
-                </Link>
-            )}
           </div>
 
           {/* User Actions */}
-          <div className="hidden lg:flex items-center space-x-4">
+          <div className="hidden lg:flex items-center space-x-3 min-w-[300px] justify-end">
             {connected && user && vip ? (
               <div className="flex items-center gap-3">
+                 <button
+                    onClick={onOpenDepositWithdraw}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium transition-all border border-purple-500/50 whitespace-nowrap"
+                    title="Deposit or Withdraw SOL"
+                 >
+                    <ArrowDownUp size={14} /> Deposit
+                 </button>
                  <Link to="/profile">
                   <div className="flex items-center gap-3 bg-sol-dark/50 border border-white/5 rounded-full pl-2 pr-4 py-1.5 hover:border-sol-green/30 transition-all cursor-pointer group">
                     <img 
@@ -167,18 +164,15 @@ export const Navbar: React.FC<NavbarProps> = ({ user, onOpenWalletModal }) => {
                 {link.name}
               </Link>
             ))}
-            {isAdmin && (
-                <Link
-                    to="/admin"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-bold uppercase text-red-500 hover:bg-red-500/10"
-                >
-                    <Lock size={18} /> Admin Panel
-                </Link>
-            )}
             <div className="border-t border-white/10 my-2 pt-2 space-y-3">
               {connected && user ? (
                 <>
+                    <button
+                        onClick={() => { onOpenDepositWithdraw?.(); setIsMobileMenuOpen(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-3 text-base font-medium text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 rounded-md"
+                    >
+                        <ArrowDownUp size={18} /> Deposit/Withdraw
+                    </button>
                     <Link 
                         to="/profile"
                         onClick={() => setIsMobileMenuOpen(false)}

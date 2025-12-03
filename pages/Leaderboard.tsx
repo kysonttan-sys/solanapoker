@@ -8,11 +8,13 @@ export const Leaderboard: React.FC = () => {
   const navigate = useNavigate();
   const [data, setData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [filterType, setFilterType] = useState<'players' | 'referrals'>('players'); // Issue #12
+  const [timeframe, setTimeframe] = useState<'all' | '30d' | '7d' | '24h'>('all'); // Issue #13
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
         try {
-            const res = await fetch('http://localhost:3001/api/leaderboard');
+            const res = await fetch(`http://localhost:4000/api/leaderboard?type=${filterType}&timeframe=${timeframe}`);
             const json = await res.json();
             // Map API response to UI format
             const formatted = json.map((u: any, i: number) => ({
@@ -21,7 +23,8 @@ export const Leaderboard: React.FC = () => {
                 player: u.username,
                 winnings: u.totalWinnings,
                 hands: u.totalHands,
-                avatar: u.avatarUrl
+                avatar: u.avatarUrl,
+                referrals: u.referralCount || 0 // Issue #12: Add referral data
             }));
             setData(formatted);
         } catch (e) {
@@ -31,18 +34,49 @@ export const Leaderboard: React.FC = () => {
         }
     };
     fetchLeaderboard();
-  }, []);
+  }, [filterType, timeframe]);
 
   const topEarner = data[0];
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex justify-between items-end gap-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
             <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-sol-purple via-white to-sol-green">
             Global Leaderboard
             </h1>
             <p className="text-gray-400">Live Rankings from Protocol Data.</p>
+        </div>
+        {/* Issue #12 & #13: Filter tabs and timeline */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex gap-2 bg-white/5 p-1 rounded-lg">
+            <button
+              onClick={() => setFilterType('players')}
+              className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${
+                filterType === 'players' ? 'bg-sol-green text-black' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Top Players
+            </button>
+            <button
+              onClick={() => setFilterType('referrals')}
+              className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${
+                filterType === 'referrals' ? 'bg-sol-purple text-black' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Top Referrers
+            </button>
+          </div>
+          <select
+            value={timeframe}
+            onChange={(e) => setTimeframe(e.target.value as any)}
+            className="bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white text-sm focus:border-sol-green focus:outline-none"
+          >
+            <option value="all">All Time</option>
+            <option value="30d">Last 30 Days</option>
+            <option value="7d">Last 7 Days</option>
+            <option value="24h">Last 24 Hours</option>
+          </select>
         </div>
       </div>
 

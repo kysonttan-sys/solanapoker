@@ -3,10 +3,13 @@ import { Server, Socket } from 'socket.io';
 import { PokerEngine, GameState } from './utils/pokerGameLogic';
 import { db } from './db';
 import { generateServerSeed, hashSeed, generateProvablyFairDeck } from './utils/fairness';
+import { getGameBlockchainHelper } from './gameBlockchain';
 
 export class GameManager {
     private io: Server;
     private tables: Map<string, GameState> = new Map();
+    private gameSpeedMultiplier: number = 1; // Issue #6: Admin can speed up game (1 = normal, 0.5 = 2x faster, 0.1 = 10x faster)
+    private botsEnabled: Map<string, boolean> = new Map(); // Issue #5: Track which tables have bots enabled
 
     constructor(io: Server) {
         this.io = io;
@@ -95,7 +98,9 @@ export class GameManager {
                 return socket.emit('error', { message: 'Insufficient funds' });
             }
 
-            // DB Transaction
+            // Note: Blockchain balance verification is handled client-side
+
+            // DB Transaction - Deduct buy-in from off-chain balance
             await db.$transaction([
                 db.user.update({
                     where: { id: user.id },
@@ -129,6 +134,35 @@ export class GameManager {
 
         this.tables.set(tableId, updatedTable);
         this.broadcastState(tableId);
+        
+        // Auto-start game if we have 2+ active players and game hasn't started
+        const activePlayers = updatedTable.players.filter((p: any) => p.status !== 'sitting-out' && p.balance > 0);
+        if (activePlayers.length >= 2 && updatedTable.currentTurnPlayerId === null && updatedTable.communityCards.length === 0) {
+            console.log(`[GameManager] Auto-starting game on table ${tableId} with ${activePlayers.length} players`);
+            setTimeout(() => {
+                const currentTable = this.tables.get(tableId);
+                if (currentTable) {
+                    // Generate fairness seeds and deck
+                    const serverSeed = generateServerSeed();
+                    const clientSeed = 'client-seed-' + Date.now();
+                    const nonce = 1;
+                    const deck = generateProvablyFairDeck(serverSeed, clientSeed, nonce);
+                    
+                    const fairnessState = {
+                        currentServerSeed: serverSeed,
+                        currentServerHash: hashSeed(serverSeed),
+                        clientSeed,
+                        nonce
+                    };
+                    
+                    // Deal cards to start the hand
+                    const newHand = PokerEngine.dealHand(currentTable, deck, fairnessState);
+                    this.tables.set(tableId, newHand);
+                    this.broadcastState(tableId);
+                    console.log(`[GameManager] Game started on table ${tableId}`);
+                }
+            }, 2000); // 2 second delay before starting
+        }
     }
 
     public handleAction(socket: Socket, tableId: string, action: any, amount: number) {
@@ -142,8 +176,23 @@ export class GameManager {
                 newState = PokerEngine.advancePhase(newState);
             }
             
-            // Handle Winners -> DB Update
+            // Handle Winners -> DB Update AND Hand History
             if (newState.winners && newState.winners.length > 0) {
+                // Track hand completion for fairness verification
+                const handToSave = {
+                    tableId: table.tableId,
+                    handNumber: table.handNumber || 1,
+                    fairnessHash: table.fairness?.previousServerHash || '',
+                    fairnessReveal: table.fairness?.previousServerSeed || undefined,
+                    clientSeed: table.fairness?.previousClientSeed || undefined,
+                    nonce: table.fairness?.previousNonce || undefined,
+                    communityCards: JSON.stringify(newState.communityCards || []),
+                    winnerIds: JSON.stringify(newState.winners.map(w => w.playerId)),
+                    potAmount: newState.pot || 0,
+                    rakeAmount: Math.round((newState.pot || 0) * 0.05), // 5% rake
+                    user: { connect: { id: newState.winners[0].playerId } } // Required by Prisma schema
+                };
+
                 newState.winners.forEach(async (winner) => {
                     if (!winner.playerId.startsWith('bot_')) {
                         try {
@@ -161,10 +210,17 @@ export class GameManager {
                                         userId: winner.playerId,
                                         type: 'GAME_WIN',
                                         amount: winner.amount,
-                                        status: 'COMPLETED'
+                                        status: 'COMPLETED',
+                                        handId: table.handNumber?.toString() || '1'
                                     }
+                                }),
+                                // Save hand for fairness verification
+                                db.hand.create({
+                                    data: handToSave
                                 })
                             ]);
+
+                            // Note: Rake distribution is automatic via protocol fee split
                         } catch(e) { console.error('DB Update Error on Win', e); }
                     }
                 });
@@ -179,7 +235,7 @@ export class GameManager {
                     if (t) {
                         try {
                             const serverSeed = generateServerSeed();
-                            const serverHash = hashSeed(serverSeed);
+                            const serverHash = await hashSeed(serverSeed);  // ✅ FIXED: Added await
                             const clientSeed = t.fairness?.clientSeed || `client_${Date.now()}`;
                             const nonce = (t.handNumber || 0) + 1;
 
@@ -212,6 +268,8 @@ export class GameManager {
         for (const [tableId, table] of this.tables.entries()) {
             const player = table.players.find((p: any) => p.socketId === socket.id);
             if (player) {
+                // Note: Balance sync handled via deposit/withdrawal events
+
                 if (player.balance > 0 && !player.id.startsWith('bot_')) {
                     await db.user.update({
                         where: { id: player.id },
@@ -235,5 +293,138 @@ export class GameManager {
     // API accessor
     public getTable(tableId: string) {
         return this.tables.get(tableId);
+    }
+
+    // Issue #6: Admin Game Speed Control
+    public setGameSpeed(multiplier: number) {
+        this.gameSpeedMultiplier = Math.max(0.1, Math.min(1, multiplier)); // Clamp between 0.1 (10x) and 1 (normal)
+        console.log(`[GameManager] Game speed set to ${this.gameSpeedMultiplier}x (${1/this.gameSpeedMultiplier}x faster)`);
+    }
+
+    public getGameSpeed() {
+        return this.gameSpeedMultiplier;
+    }
+
+    // Issue #5: Admin Bot Control
+    public async addBot(tableId: string, adminWallet: string) {
+        const ADMIN_WALLET = 'GvYPMAk8CddRucjwLHDud1yy51QQtQDhgiB9AWdRtAoD';
+        if (adminWallet !== ADMIN_WALLET) {
+            console.warn('[GameManager] Unauthorized bot add attempt');
+            return { success: false, message: 'Unauthorized' };
+        }
+
+        const table = this.tables.get(tableId);
+        if (!table) return { success: false, message: 'Table not found' };
+
+        const emptySeats = Array.from({ length: table.maxSeats }, (_, i) => i)
+            .filter(i => !table.players.some(p => p.position === i));
+
+        if (emptySeats.length === 0) {
+            return { success: false, message: 'Table is full' };
+        }
+
+        const botPosition = emptySeats[Math.floor(Math.random() * emptySeats.length)];
+        const botId = `bot_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const botNames = ['AlphaBot', 'BetaBot', 'GammaBot', 'DeltaBot', 'EpsilonBot', 'ZetaBot'];
+        const botName = botNames[Math.floor(Math.random() * botNames.length)];
+
+        const botPlayer = {
+            id: botId,
+            name: botName,
+            avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${botId}`,
+            balance: table.bigBlind * 100, // 100 BB stack
+            bet: 0,
+            cards: [],
+            position: botPosition,
+            status: 'active' as const,
+            isTurn: false,
+            socketId: 'bot',
+            isBot: true
+        } as any;
+
+        const updatedTable: any = {
+            ...table,
+            players: [...table.players, botPlayer]
+        };
+
+        this.tables.set(tableId, updatedTable);
+        this.botsEnabled.set(tableId, true);
+        this.broadcastState(tableId);
+
+        // Start bot AI loop
+        this.startBotAI(tableId, botId);
+
+        return { success: true, message: `Bot ${botName} added to table`, botId };
+    }
+
+    public removeBot(tableId: string, botId: string, adminWallet: string) {
+        const ADMIN_WALLET = 'GvYPMAk8CddRucjwLHDud1yy51QQtQDhgiB9AWdRtAoD';
+        if (adminWallet !== ADMIN_WALLET) {
+            return { success: false, message: 'Unauthorized' };
+        }
+
+        const table = this.tables.get(tableId);
+        if (!table) return { success: false, message: 'Table not found' };
+
+        const updatedTable = {
+            ...table,
+            players: table.players.filter((p: any) => p.id !== botId)
+        };
+
+        this.tables.set(tableId, updatedTable);
+        this.broadcastState(tableId);
+
+        return { success: true, message: 'Bot removed' };
+    }
+
+    private startBotAI(tableId: string, botId: string) {
+        const botThink = () => {
+            const table = this.tables.get(tableId);
+            if (!table) return;
+
+            const bot = table.players.find((p: any) => p.id === botId);
+            if (!bot || !bot.isTurn) {
+                setTimeout(botThink, 500 * this.gameSpeedMultiplier);
+                return;
+            }
+
+            // Simple bot logic: Random action weighted by hand strength
+            const actions = ['fold', 'check', 'call', 'raise'];
+            const weights = [0.2, 0.3, 0.3, 0.2]; // Adjust based on sophistication
+            const rand = Math.random();
+            let action: string = 'fold'; // Initialize with default
+            let cumulative = 0;
+
+            for (let i = 0; i < actions.length; i++) {
+                cumulative += weights[i];
+                if (rand <= cumulative) {
+                    action = actions[i];
+                    break;
+                }
+            }
+
+            // Validate action
+            const toCall = Math.max(0, (table.minBet || 0) - bot.bet);
+            if (action === 'check' && toCall > 0) action = 'fold';
+            if (action === 'call' && toCall === 0) action = 'check';
+            if (action === 'raise' && bot.balance < table.bigBlind * 2) action = toCall > 0 ? 'call' : 'check';
+
+            const raiseAmount = action === 'raise' ? table.bigBlind * (2 + Math.floor(Math.random() * 3)) : 0;
+
+            setTimeout(() => {
+                try {
+                    const updatedTable = PokerEngine.handleAction(table, botId, action as any, raiseAmount);
+                    this.tables.set(tableId, updatedTable);
+                    this.broadcastState(tableId);
+
+                    // Continue thinking
+                    setTimeout(botThink, 500 * this.gameSpeedMultiplier);
+                } catch (e) {
+                    console.error('[Bot AI] Error processing action:', e);
+                }
+            }, (1000 + Math.random() * 2000) * this.gameSpeedMultiplier); // Bot thinks for 1-3 seconds
+        };
+
+        setTimeout(botThink, 1000 * this.gameSpeedMultiplier);
     }
 }

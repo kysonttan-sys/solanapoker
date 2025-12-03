@@ -44,6 +44,8 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
   // Join Process State
   const [joinPhase, setJoinPhase] = useState<JoinPhase>('idle');
   const [selectedSeatIndex, setSelectedSeatIndex] = useState<number | undefined>(undefined);
+  const [isBuyInOpen, setIsBuyInOpen] = useState(false);
+  const [isCaptchaOpen, setIsCaptchaOpen] = useState(false);
 
   // UI Toggles
   const [isFairnessOpen, setIsFairnessOpen] = useState(false);
@@ -159,8 +161,11 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
    */
   const handleCaptchaVerified = () => {
       console.log("[Join] Captcha verified. Moving to Buy-In.");
+      setIsCaptchaOpen(false); // Close CAPTCHA modal
       onVerify(); // Update global user state
+      setIsBuyInOpen(true); // Open buy-in modal
       setJoinPhase('buying-in'); // Move to Phase 3
+      console.log("[Join] Buy-in modal opened, phase set to 'buying-in'");
   };
 
   /**
@@ -171,6 +176,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
       if (!user || !tableId || !socket) return;
 
       console.log(`[Join] Sending sitDown request. Amount: ${amount}, Seat: ${selectedSeatIndex}`);
+      setIsBuyInOpen(false); // Close buy-in modal
       setJoinPhase('joining'); // Show loading state
 
       // Emit Sit Down Event
@@ -182,6 +188,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
       });
 
       // We rely on 'gameStateUpdate' or 'error' event to change phase from 'joining'
+      console.log("[Join] sitDown event emitted, waiting for server response");
   };
 
   /**
@@ -189,6 +196,8 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
    */
   const cancelJoin = () => {
       console.log("[Join] Cancelled by user.");
+      setIsCaptchaOpen(false);
+      setIsBuyInOpen(false);
       setJoinPhase('idle');
       setSelectedSeatIndex(undefined);
   };

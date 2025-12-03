@@ -79,13 +79,21 @@ export const evaluateHand = (allCards: CardData[]): HandResult => {
           }
       }
 
-      // Check Wheel (A-2-3-4-5)
-      // A is at index 0 (value 14). We need 5,4,3,2.
+      // Check Wheel (A-2-3-4-5) - Ace counts as LOW
       const hasAce = uniqueRankCards[0].rank === 'A';
       if (hasAce) {
-          const wheelCards = uniqueRankCards.filter(c => ['5','4','3','2'].includes(c.rank));
-          if (wheelCards.length === 4) {
-              // Construct wheel: 5, 4, 3, 2, A
+          const wheelRanks = ['5','4','3','2'];
+          const wheelCards: CardData[] = [];
+          let hasAllWheelCards = true;
+          
+          for (const rank of wheelRanks) {
+              const card = uniqueRankCards.find(c => c.rank === rank);
+              if (card) wheelCards.push(card);
+              else { hasAllWheelCards = false; break; }
+          }
+          
+          if (hasAllWheelCards) {
+              // Return wheel in correct order: 5-4-3-2-A (with A as lowest)
               return [...wheelCards, uniqueRankCards[0]];
           }
       }

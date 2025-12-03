@@ -4,7 +4,11 @@ import { Cookie } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Link } from 'react-router-dom';
 
-export const CookieConsent: React.FC = () => {
+interface CookieConsentProps {
+  onConsentChange?: (accepted: boolean) => void;
+}
+
+export const CookieConsent: React.FC<CookieConsentProps> = ({ onConsentChange }) => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -14,16 +18,21 @@ export const CookieConsent: React.FC = () => {
       // Small delay for smooth entrance animation
       const timer = setTimeout(() => setIsVisible(true), 1500);
       return () => clearTimeout(timer);
+    } else {
+      // Notify parent of existing consent
+      onConsentChange?.(consent === 'accepted');
     }
-  }, []);
+  }, [onConsentChange]);
 
   const handleAccept = () => {
     localStorage.setItem('solpoker_cookie_consent', 'accepted');
+    onConsentChange?.(true);
     setIsVisible(false);
   };
 
   const handleDecline = () => {
     localStorage.setItem('solpoker_cookie_consent', 'declined');
+    onConsentChange?.(false);
     setIsVisible(false);
   };
 

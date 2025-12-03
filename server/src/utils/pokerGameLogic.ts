@@ -284,8 +284,41 @@ export class PokerEngine {
       if (playerIndex === -1) return state;
 
       const player = state.players[playerIndex];
-      // Basic check: ensure it's their turn
-      if (!player.isTurn) return state;
+      
+      // --- ACTION VALIDATION ---
+      // Ensure it's their turn
+      if (!player.isTurn) {
+          console.warn(`[PokerEngine] Invalid turn: ${playerId} is not current player`);
+          return state;
+      }
+      
+      // Validate action legality based on betting state
+      const roundBetAmount = state.minBet - player.bet;
+      
+      switch (action) {
+          case 'check':
+              // Can only check if no bet to call
+              if (roundBetAmount > 0 && player.balance > 0) {
+                  console.warn(`[PokerEngine] Invalid check: ${player.name} must call/fold (${roundBetAmount} to call)`);
+                  return state;
+              }
+              break;
+          case 'call':
+              // Must have a bet to call
+              if (roundBetAmount <= 0 && state.minBet > 0) {
+                  console.warn(`[PokerEngine] Invalid call: no bet to call`);
+                  return state;
+              }
+              break;
+          case 'raise':
+              // Raise amount must exceed minimum raise
+              const minRaise = state.minBet + (state.minBet - (player.bet || 0));
+              if (amount < minRaise && player.balance > 0) {
+                  console.warn(`[PokerEngine] Invalid raise: ${amount} < minimum ${minRaise}`);
+                  return state;
+              }
+              break;
+      }
 
       let newPlayers = [...state.players];
       let newPot = state.pot;

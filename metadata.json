@@ -1,8 +1,0 @@
-{
-  "name": "SOLPOKER X",
-  "description": "Decentralized Poker Platform on Solana Blockchain featuring real-time tables, tournaments, and deep analytics.",
-  "requestFramePermissions": [
-    "camera",
-    "microphone"
-  ]
-}

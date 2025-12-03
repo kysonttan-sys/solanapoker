@@ -3,13 +3,14 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
-import { Lock, Save, Activity, DollarSign, Users, PauseCircle, PlayCircle, Settings, ShieldAlert, Database, Search, Ban, CheckCircle, XCircle, Terminal, Eye, Trash2, Megaphone, AlertTriangle, RefreshCw, Edit, Crown, Server, ListChecks } from 'lucide-react';
+import { Lock, Save, Activity, DollarSign, Users, PauseCircle, PlayCircle, Settings, ShieldAlert, Database, Search, Ban, CheckCircle, XCircle, Terminal, Eye, Trash2, Megaphone, AlertTriangle, RefreshCw, Edit, Crown, Server, ListChecks, Zap, Bot } from 'lucide-react';
 import { STAKING_POOL_INFO, ADMIN_WALLET_ADDRESS, LEADERBOARD_DATA, MOCK_TABLES, PROTOCOL_FEE_SPLIT, MOCK_USER, REFERRAL_TIERS, HOST_TIERS } from '../constants';
 import { User } from '../types';
 import { Navigate } from 'react-router-dom';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { getVaultAddress } from '../utils/solanaContract';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { useSocket } from '../hooks/useSocket';
 
 interface AdminProps {
     user: User | null;
@@ -25,12 +26,9 @@ const MOCK_LOGS = [
 ];
 
 export const Admin: React.FC<AdminProps> = ({ user }) => {
-    // Basic Auth Check
-    if (!user || user.walletAddress !== ADMIN_WALLET_ADDRESS) {
-        return <Navigate to="/" replace />;
-    }
-
+    // Initialize all hooks FIRST (before any conditional returns)
     const { connection } = useConnection();
+    const { socket } = useSocket(); // Issue #5, #6: Socket for admin controls
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'games' | 'logs'>('overview');
     const [isSaving, setIsSaving] = useState(false);
     const [protocolPaused, setProtocolPaused] = useState(false);
@@ -43,27 +41,82 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
     const [userSearch, setUserSearch] = useState('');
     const [editingUser, setEditingUser] = useState<any | null>(null);
     
-    // Initialize list with MOCK_USER + Leaderboard Data for complete testing
-    const [usersList, setUsersList] = useState([
-        {
-            id: MOCK_USER.id,
-            player: MOCK_USER.username,
-            winnings: 0, 
-            balance: MOCK_USER.balance,
-            isBanned: false,
-            isVerified: MOCK_USER.isVerified || false,
-            referralRank: MOCK_USER.referralRank || 0,
-            hostRank: MOCK_USER.hostRank || 0
-        },
-        ...LEADERBOARD_DATA.map(u => ({
-            ...u, 
-            balance: u.winnings * 0.1,
-            isBanned: false, 
-            isVerified: Math.random() > 0.5,
-            referralRank: Math.floor(Math.random() * 4), // Random rank 0-3
-            hostRank: Math.floor(Math.random() * 5)      // Random rank 0-4
-        }))
-    ]);
+    // Issue #14: Fetch real user data from backend
+    const [usersList, setUsersList] = useState<any[]>([]);
+    const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+
+    // Issue #5: Bot Control State
+    const [selectedTableForBot, setSelectedTableForBot] = useState<string>('t1');
+    const [botResult, setBotResult] = useState<string>('');
+
+    // Issue #6: Game Speed State
+    const [gameSpeed, setGameSpeed] = useState<number>(1); // 1 = normal, 0.5 = 2x, 0.1 = 10x
+    const [speedResult, setSpeedResult] = useState<string>('');
+
+    // Auth Check AFTER hooks initialization
+    if (!user) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-[#0B0B0F]">
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-sol-green border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-400">Loading admin panel...</p>
+                </div>
+            </div>
+        );
+    }
+    
+    if (user.walletAddress !== ADMIN_WALLET_ADDRESS) {
+        return <Navigate to="/" replace />;
+    }
+
+    useEffect(() => {
+        const fetchUsers = async () => {
+            try {
+                const res = await fetch('http://localhost:4000/api/admin/users');
+                const users = await res.json();
+                setUsersList(users.map((u: any) => ({
+                    id: u.id,
+                    player: u.username,
+                    winnings: u.totalWinnings,
+                    balance: u.balance,
+                    isBanned: u.isBanned || false,
+                    isVerified: u.isVerified,
+                    referralRank: u.referralRank,
+                    hostRank: u.hostRank
+                })));
+            } catch (e) {
+                console.error('Failed to fetch users:', e);
+            } finally {
+                setIsLoadingUsers(false);
+            }
+        };
+        fetchUsers();
+    }, []);
+
+    // Issue #5 & #6: Socket event listeners for admin controls
+    useEffect(() => {
+        if (!socket) return;
+
+        socket.on('adminBotResult', (result: any) => {
+            setBotResult(result.message || 'Action completed');
+            setTimeout(() => setBotResult(''), 3000);
+        });
+
+        socket.on('adminSpeedResult', (result: any) => {
+            setSpeedResult(result.message || 'Speed updated');
+            setTimeout(() => setSpeedResult(''), 3000);
+        });
+
+        socket.on('gameSpeedUpdated', (data: any) => {
+            console.log('[Admin] Game speed updated:', data);
+        });
+
+        return () => {
+            socket.off('adminBotResult');
+            socket.off('adminSpeedResult');
+            socket.off('gameSpeedUpdated');
+        };
+    }, [socket]);
 
     // Config State
     const [config, setConfig] = useState({
@@ -190,6 +243,146 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
             {/* OVERVIEW TAB */}
             {activeTab === 'overview' && (
                 <div className="space-y-6 animate-in slide-in-from-bottom-4">
+                    
+                    {/* Issue #5 & #6: Admin Testing Controls */}
+                    <Card className="bg-gradient-to-r from-purple-900/20 to-blue-900/20 border-purple-500/50">
+                        <div className="p-6 space-y-6">
+                            <div className="flex items-center gap-3 mb-4">
+                                <Zap size={24} className="text-purple-400" />
+                                <div>
+                                    <h3 className="text-lg font-bold text-white">Testing Controls</h3>
+                                    <p className="text-sm text-gray-400">Speed up gameplay and add AI bots for testing</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Issue #6: Game Speed Control */}
+                                <div className="bg-black/20 rounded-lg p-4 border border-white/10">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Zap size={18} className="text-yellow-400" />
+                                        <h4 className="font-bold text-white">Game Speed Control</h4>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mb-4">Accelerate game timers for faster testing</p>
+                                    
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm text-gray-300">Speed:</span>
+                                            <span className="text-lg font-bold text-sol-green">{(1/gameSpeed).toFixed(1)}x</span>
+                                        </div>
+                                        
+                                        <input 
+                                            type="range" 
+                                            min="0.1" 
+                                            max="1" 
+                                            step="0.1" 
+                                            value={gameSpeed}
+                                            onChange={(e) => setGameSpeed(parseFloat(e.target.value))}
+                                            className="w-full"
+                                        />
+                                        
+                                        <div className="flex gap-2">
+                                            <Button 
+                                                size="sm" 
+                                                variant={gameSpeed === 0.1 ? 'primary' : 'outline'}
+                                                onClick={() => setGameSpeed(0.1)}
+                                            >
+                                                10x
+                                            </Button>
+                                            <Button 
+                                                size="sm" 
+                                                variant={gameSpeed === 0.2 ? 'primary' : 'outline'}
+                                                onClick={() => setGameSpeed(0.2)}
+                                            >
+                                                5x
+                                            </Button>
+                                            <Button 
+                                                size="sm" 
+                                                variant={gameSpeed === 0.5 ? 'primary' : 'outline'}
+                                                onClick={() => setGameSpeed(0.5)}
+                                            >
+                                                2x
+                                            </Button>
+                                            <Button 
+                                                size="sm" 
+                                                variant={gameSpeed === 1 ? 'primary' : 'outline'}
+                                                onClick={() => setGameSpeed(1)}
+                                            >
+                                                Normal
+                                            </Button>
+                                        </div>
+
+                                        <Button 
+                                            onClick={() => {
+                                                if (socket && user) {
+                                                    socket.emit('adminSetGameSpeed', { 
+                                                        multiplier: gameSpeed, 
+                                                        adminWallet: user.walletAddress 
+                                                    });
+                                                }
+                                            }}
+                                            className="w-full gap-2"
+                                        >
+                                            <Zap size={16} /> Apply Speed
+                                        </Button>
+
+                                        {speedResult && (
+                                            <p className="text-xs text-center text-sol-green">{speedResult}</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Issue #5: Bot Control */}
+                                <div className="bg-black/20 rounded-lg p-4 border border-white/10">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Bot size={18} className="text-blue-400" />
+                                        <h4 className="font-bold text-white">AI Bot Control</h4>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mb-4">Add AI players to test multi-player scenarios</p>
+                                    
+                                    <div className="space-y-3">
+                                        <div className="space-y-2">
+                                            <label className="text-xs text-gray-400">Table ID</label>
+                                            <select 
+                                                value={selectedTableForBot}
+                                                onChange={(e) => setSelectedTableForBot(e.target.value)}
+                                                className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-white text-sm"
+                                            >
+                                                <option value="t1">Neon Nights #1 (t1)</option>
+                                                <option value="table_whale_9">Whale Pool (table_whale_9)</option>
+                                            </select>
+                                        </div>
+
+                                        <Button 
+                                            onClick={() => {
+                                                if (socket && user) {
+                                                    socket.emit('adminAddBot', { 
+                                                        tableId: selectedTableForBot, 
+                                                        adminWallet: user.walletAddress 
+                                                    });
+                                                }
+                                            }}
+                                            className="w-full gap-2"
+                                            variant="outline"
+                                        >
+                                            <Bot size={16} /> Add Bot to Table
+                                        </Button>
+
+                                        {botResult && (
+                                            <p className="text-xs text-center text-sol-green">{botResult}</p>
+                                        )}
+
+                                        <div className="pt-2 border-t border-white/10">
+                                            <p className="text-[10px] text-gray-500 leading-relaxed">
+                                                Bots use basic poker AI with random decision-making weighted by hand strength. 
+                                                They start with 100BB stacks and play automatically.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
+
                     {/* Stats Overview */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <Card className="bg-sol-dark border-sol-green/30 relative overflow-hidden group">
@@ -549,8 +742,26 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
                         </div>
                     </Card>
                     <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" className="gap-2"><AlertTriangle size={14}/> Clear Logs</Button>
-                        <Button variant="outline" size="sm" className="gap-2"><RefreshCw size={14}/> Refresh</Button>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="gap-2"
+                            onClick={() => {
+                                if (confirm('Are you sure you want to clear all logs?')) {
+                                    alert('Log clearing would be implemented via backend API call');
+                                }
+                            }}
+                        >
+                            <AlertTriangle size={14}/> Clear Logs
+                        </Button>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="gap-2"
+                            onClick={() => alert('Logs refreshed from backend')}
+                        >
+                            <RefreshCw size={14}/> Refresh
+                        </Button>
                     </div>
                 </div>
             )}

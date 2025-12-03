@@ -35,23 +35,53 @@ export const TOKENOMICS_INFO = {
 };
 
 export const PRIZE_POOL_INFO = {
-    currentAmount: 14520.50, // 5% of fees accumulated
-    nextPayout: new Date(Date.now() + 259200000).toISOString(), // 3 days
+    currentAmount: 0, // Starts from 0, accumulates 5% of rake
+    nextPayout: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
     distribution: {
-        topPlayer: 40, // %
-        topEarner: 30, // %
-        luckyDraw: 30  // % (Split among 10)
+        topPlayer: 30,  // 30% to Top Players
+        topEarner: 30,  // 30% to Top Earner
+        luckyDraw: 40   // 40% to 10x Lucky Players (random & fair)
     }
 };
 
-// Global Economic Model
+// Issue #15: Rake Distribution Model (Compliant with Documentation)
+// Base Rake: 3-5% depending on VIP level
+// Example: $100 pot with 3% rake = $3 total rake collected
+//
+// DISTRIBUTION BREAKDOWN:
+// 1. Host Share: 30-40% (based on Host Tier)
+//    - Dealer (Tier 0): 30% of rake
+//    - Casino Mogul (Tier 4): 40% of rake
+// 2. Referrer Share: 5-20% (based on Referral Tier)
+//    - Scout (Tier 0): 5% of rake
+//    - Partner (Tier 3): 20% of rake
+// 3. Protocol Allocations (from remaining rake after host + referrer):
+//    - Buyback & Burn: 10%
+//    - Community Jackpot: 5%
+//    - Global Partner Pool: 5%
+//    - Developer Treasury: Remainder (typically 20-30%)
+//
+// EXAMPLE CALCULATION:
+// Pot: $100, Rake: 3% = $3
+// - Host (Tier 2, 35%): $1.05
+// - Referrer (Tier 1, 10%): $0.30
+// - Remaining: $1.65
+//   * Buyback (10% of $3): $0.30
+//   * Jackpot (5% of $3): $0.15
+//   * Global Pool (5% of $3): $0.15
+//   * Developer (remainder): $1.05
+// Total: $3.00 ✓
+
 export const PROTOCOL_FEE_SPLIT = {
-    buyback: 10,   // 10% of Revenue to Buyback & Burn SPX
-    jackpot: 5,    // 5% to Community Jackpot
-    globalPool: 5, // 5% to Global Partner Pool (Rank 3)
-    referrerMax: 20, // Max Ref commission (Rank 3)
-    // Host varies 30-40%
-    // Developer gets the remainder
+    buyback: 10,   // 10% of total rake to Buyback & Burn SPX
+    jackpot: 5,    // 5% of total rake to Community Jackpot
+    globalPool: 5, // 5% of total rake to Global Partner Pool (Rank 3 Referrers)
+    referrerMax: 20, // Max Referrer commission (Partner Rank 3)
+    referrerMin: 5,  // Min Referrer commission (Scout Rank 0)
+    hostMax: 40,     // Max Host share (Casino Mogul Tier 4)
+    hostMin: 30,     // Min Host share (Dealer Tier 0)
+    // Developer receives remainder after all allocations
+    // Formula: developer = rake - (host + referrer + buyback + jackpot + globalPool)
 };
 
 export const VIP_LEVELS = [

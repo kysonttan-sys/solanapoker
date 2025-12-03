@@ -51,7 +51,14 @@ export const CaptchaModal: React.FC<CaptchaModalProps> = ({ isOpen, onVerify, ca
 
   useEffect(() => {
       setSuccess(isVerified);
-  }, [isVerified]);
+      // If user is already verified, automatically trigger onVerify to skip captcha
+      if (isOpen && isVerified) {
+          console.log('[Captcha] User already verified, auto-completing...');
+          setTimeout(() => {
+              onVerify();
+          }, 500);
+      }
+  }, [isVerified, isOpen, onVerify]);
 
   useEffect(() => {
       if (isOpen && !isVerified) generateCaptcha();

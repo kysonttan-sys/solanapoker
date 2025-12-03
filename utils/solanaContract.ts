@@ -41,7 +41,7 @@ async function getAnchorDiscriminator(instructionName: string): Promise<Buffer> 
 // 1. BUY IN (Deposit)
 export const createBuyInInstruction = async (
     playerPublicKey: PublicKey,
-    amountChips: number
+    amountSol: number // Changed from amountChips - this is SOL amount
 ): Promise<TransactionInstruction> => {
     const programId = new PublicKey(SOL_POKER_PROGRAM_ID);
     const vaultPda = await getVaultAddress();
@@ -50,10 +50,8 @@ export const createBuyInInstruction = async (
     // Function Name in Rust: "buy_in"
     const discriminator = await getAnchorDiscriminator("buy_in");
 
-    // Conversion: 100,000 Chips = 1 SOL (DevTest Mode)
-    // We use BigInt to ensure 64-bit precision for the Rust u64
-    const realSolAmount = amountChips / 100000; 
-    const amountLamports = BigInt(Math.floor(realSolAmount * LAMPORTS_PER_SOL));
+    // Convert SOL to lamports
+    const amountLamports = BigInt(Math.floor(amountSol * LAMPORTS_PER_SOL));
     
     // Data Layout: [Discriminator (8 bytes)] + [Amount (8 bytes)]
     const dataBuffer = Buffer.alloc(16);
@@ -65,7 +63,7 @@ export const createBuyInInstruction = async (
         user: playerPublicKey.toBase58(),
         vault: vaultPda.toBase58(),
         userState: userStatePda.toBase58(),
-        amountChips: amountChips,
+        amountSol: amountSol,
         lamports: amountLamports.toString()
     });
 
@@ -84,7 +82,7 @@ export const createBuyInInstruction = async (
 // 2. LEAVE TABLE (Withdraw)
 export const createLeaveTableInstruction = async (
     playerPublicKey: PublicKey,
-    amountChips: number
+    amountSol: number // Changed from amountChips - this is SOL amount
 ): Promise<TransactionInstruction> => {
     const programId = new PublicKey(SOL_POKER_PROGRAM_ID);
     const vaultPda = await getVaultAddress();
@@ -93,8 +91,8 @@ export const createLeaveTableInstruction = async (
     // Function Name in Rust: "leave_table"
     const discriminator = await getAnchorDiscriminator("leave_table");
 
-    const realSolAmount = amountChips / 100000;
-    const amountLamports = BigInt(Math.floor(realSolAmount * LAMPORTS_PER_SOL));
+    // Convert SOL to lamports
+    const amountLamports = BigInt(Math.floor(amountSol * LAMPORTS_PER_SOL));
 
     // Data Layout: [Discriminator (8 bytes)] + [Amount (8 bytes)]
     const dataBuffer = Buffer.alloc(16);
@@ -103,8 +101,8 @@ export const createLeaveTableInstruction = async (
 
     console.log("[Contract Security] Creating Withdraw Instruction", {
         user: playerPublicKey.toBase58(),
-        amountChips: amountChips,
-        lamportsToCheckAgainstBalance: amountLamports.toString()
+        amountSol: amountSol,
+        lamports: amountLamports.toString()
     });
 
     return new TransactionInstruction({
@@ -123,30 +121,36 @@ export const createLeaveTableInstruction = async (
 
 export const depositToVault = async (
     connection: Connection,
-    wallet: any, 
+    sendTransaction: any,
+    publicKey: PublicKey,
     amount: number
 ) => {
-    if (!wallet.publicKey) throw new Error("Wallet not connected");
+    if (!publicKey) throw new Error("Wallet not connected");
 
     try {
-        const instruction = await createBuyInInstruction(wallet.publicKey, amount);
+        const instruction = await createBuyInInstruction(publicKey, amount);
         const transaction = new Transaction().add(instruction);
         
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
         transaction.recentBlockhash = blockhash;
-        transaction.feePayer = wallet.publicKey;
+        transaction.feePayer = publicKey;
 
-        let signature = '';
-
-        if (wallet.signTransaction) {
-            const signedTransaction = await wallet.signTransaction(transaction);
-            signature = await connection.sendRawTransaction(signedTransaction.serialize());
-        } else {
-            signature = await wallet.sendTransaction(transaction, connection);
-        }
+        // Use sendTransaction from useWallet hook
+        const signature = await sendTransaction(transaction, connection, {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed',
+        });
         
         console.log(`[Chain] Deposit TX Sent: ${signature}`);
-        const confirmation = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight });
+        
+        // Wait for confirmation with timeout
+        const confirmationStrategy = {
+            signature,
+            blockhash,
+            lastValidBlockHeight
+        };
+        
+        const confirmation = await connection.confirmTransaction(confirmationStrategy, 'confirmed');
 
         if (confirmation.value.err) {
             console.error("Deposit Confirmation Error:", confirmation.value.err);
@@ -156,36 +160,46 @@ export const depositToVault = async (
     } catch (e: any) {
         // Pass the error message back cleanly
         console.error("Deposit Error Details:", e);
-        throw e;
+        console.error("Error name:", e.name);
+        console.error("Error message:", e.message);
+        console.error("Error stack:", e.stack);
+        if (e.logs) console.error("Transaction logs:", e.logs);
+        throw new Error(e.message || "Deposit failed. Please check console for details.");
     }
 };
 
 export const withdrawFromVault = async (
     connection: Connection,
-    wallet: any,
+    sendTransaction: any,
+    publicKey: PublicKey,
     amount: number
 ) => {
-    if (!wallet.publicKey) throw new Error("Wallet not connected");
+    if (!publicKey) throw new Error("Wallet not connected");
 
     try {
-        const instruction = await createLeaveTableInstruction(wallet.publicKey, amount);
+        const instruction = await createLeaveTableInstruction(publicKey, amount);
         const transaction = new Transaction().add(instruction);
         
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
         transaction.recentBlockhash = blockhash;
-        transaction.feePayer = wallet.publicKey;
+        transaction.feePayer = publicKey;
 
-        let signature = '';
-
-        if (wallet.signTransaction) {
-            const signedTransaction = await wallet.signTransaction(transaction);
-            signature = await connection.sendRawTransaction(signedTransaction.serialize());
-        } else {
-            signature = await wallet.sendTransaction(transaction, connection);
-        }
+        // Use sendTransaction from useWallet hook
+        const signature = await sendTransaction(transaction, connection, {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed',
+        });
         
         console.log(`[Chain] Withdraw TX Sent: ${signature}`);
-        const confirmation = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight });
+        
+        // Wait for confirmation with timeout
+        const confirmationStrategy = {
+            signature,
+            blockhash,
+            lastValidBlockHeight
+        };
+        
+        const confirmation = await connection.confirmTransaction(confirmationStrategy, 'confirmed');
 
         if (confirmation.value.err) {
             console.error("Withdraw Confirmation Error:", confirmation.value.err);

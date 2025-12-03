@@ -38,13 +38,34 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables, to
     .sort((a, b) => b.registeredPlayers - a.registeredPlayers)
     .slice(0, 3);
 
-  // Platform Statistics Data
-  const platformStats = [
-    { label: 'Total Volume', value: '$142.5M+', icon: <Coins size={18} className="text-yellow-500" />, sub: 'Lifetime Traded' },
-    { label: 'Hands Dealt', value: '25.4M', icon: <Layers size={18} className="text-sol-purple" />, sub: 'Verifiable RNG' },
-    { label: 'Active Players', value: '2,405', icon: <Users size={18} className="text-sol-blue" />, sub: 'Online Now' },
+  // Platform Statistics Data - Live from Backend
+  const [platformStats, setPlatformStats] = React.useState([
+    { label: 'Total Volume', value: 'Loading...', icon: <Coins size={18} className="text-yellow-500" />, sub: 'Lifetime Traded' },
+    { label: 'Hands Dealt', value: 'Loading...', icon: <Layers size={18} className="text-sol-purple" />, sub: 'Verifiable RNG' },
+    { label: 'Active Players', value: 'Loading...', icon: <Users size={18} className="text-sol-blue" />, sub: 'Online Now' },
     { label: 'Avg Payout', value: '< 2s', icon: <Zap size={18} className="text-sol-green" />, sub: 'Instant Settlement' },
-  ];
+  ]);
+
+  // Fetch live stats from backend
+  React.useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch('http://localhost:4000/api/stats');
+        const data = await response.json();
+        setPlatformStats([
+          { label: 'Total Volume', value: `$${(data.totalVolume || 0).toLocaleString()}`, icon: <Coins size={18} className="text-yellow-500" />, sub: 'Lifetime Traded' },
+          { label: 'Hands Dealt', value: `${(data.totalHands || 0).toLocaleString()}`, icon: <Layers size={18} className="text-sol-purple" />, sub: 'Verifiable RNG' },
+          { label: 'Active Players', value: `${data.activePlayers || 0}`, icon: <Users size={18} className="text-sol-blue" />, sub: 'Online Now' },
+          { label: 'Avg Payout', value: '< 2s', icon: <Zap size={18} className="text-sol-green" />, sub: 'Instant Settlement' },
+        ]);
+      } catch (error) {
+        console.error('Failed to fetch stats:', error);
+      }
+    };
+    fetchStats();
+    const interval = setInterval(fetchStats, 30000); // Refresh every 30s
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="space-y-12 animate-in fade-in duration-500">

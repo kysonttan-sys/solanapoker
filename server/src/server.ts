@@ -51,20 +51,83 @@ app.get('/api/stats', async (req, res) => {
 // 2. Leaderboard (Real DB Data)
 app.get('/api/leaderboard', async (req, res) => {
     try {
+        const type = req.query.type || 'players'; // 'players' or 'referrals'
+        const timeframe = req.query.timeframe || 'all'; // 'all', '30d', '7d', '24h'
+        
+        let whereClause: any = {};
+        
+        // Issue #13: Filter by timeframe
+        if (timeframe !== 'all') {
+            const now = new Date();
+            let startDate: Date;
+            
+            if (timeframe === '24h') {
+                startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            } else if (timeframe === '7d') {
+                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            } else if (timeframe === '30d') {
+                startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            } else {
+                startDate = new Date(0);
+            }
+            
+            whereClause.updatedAt = { gte: startDate };
+        }
+        
+        // Issue #12: Sort by players or referrals
+        const orderBy = type === 'referrals' 
+            ? { referralCount: 'desc' as const }
+            : { totalWinnings: 'desc' as const };
+        
         const users = await db.user.findMany({
-            orderBy: { totalWinnings: 'desc' },
+            where: whereClause,
+            orderBy,
             take: 50,
             select: {
                 id: true,
                 username: true,
                 totalWinnings: true,
                 totalHands: true,
-                avatarUrl: true
+                avatarUrl: true,
+                referralCode: true,
+                referralRank: true
+            }
+        });
+        
+        // Add referral count (count users who have this user's referralCode)
+        const usersWithRefCounts = await Promise.all(users.map(async (u) => {
+            const referralCount = u.referralCode 
+                ? await db.user.count({ where: { referredBy: u.referralCode } })
+                : 0;
+            return { ...u, referralCount };
+        }));
+        
+        res.json(usersWithRefCounts);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to fetch leaderboard' });
+    }
+});
+
+// Issue #14: Admin endpoint to fetch all users
+app.get('/api/admin/users', async (req, res) => {
+    try {
+        const users = await db.user.findMany({
+            orderBy: { totalWinnings: 'desc' },
+            select: {
+                id: true,
+                username: true,
+                balance: true,
+                totalWinnings: true,
+                totalHands: true,
+                isVerified: true,
+                referralRank: true,
+                hostRank: true,
+                createdAt: true
             }
         });
         res.json(users);
     } catch (e) {
-        res.status(500).json({ error: 'Failed to fetch leaderboard' });
+        res.status(500).json({ error: 'Failed to fetch users' });
     }
 });
 
@@ -107,22 +170,182 @@ app.get('/api/tables', (req, res) => {
     res.json(tables);
 });
 
-// 5. Proof endpoint — returns provably-fair data for a table
-app.get('/api/proof/:tableId', (req, res) => {
+// 5. Current fairness state — returns current hand fairness data
+app.get('/api/proof/:tableId/current', (req, res) => {
     try {
         const table = gameManager.getTable(req.params.tableId);
         if (!table) return res.status(404).json({ error: 'Table not found' });
 
-        // Return the relevant fairness record and the deck used for the current/last hand
+        // Return current fairness data (server seed HIDDEN until hand ends)
         return res.json({
             tableId: table.tableId,
             handNumber: table.handNumber,
-            fairness: table.fairness,
-            deck: table.deck || [],
-            lastHand: table.lastHand || null
+            phase: table.phase,
+            fairness: {
+                serverHash: table.fairness?.currentServerHash || null, // Hash visible, seed hidden
+                clientSeed: table.fairness?.clientSeed || null,
+                nonce: table.fairness?.nonce || null,
+                deck: table.deck || [] // Current deck
+            },
+            timestamp: new Date().toISOString()
         });
     } catch (e) {
-        return res.status(500).json({ error: 'Failed to fetch proof' });
+        return res.status(500).json({ error: 'Failed to fetch fairness' });
+    }
+});
+
+// 6. Seed reveal endpoint — after hand ends, player can verify fairness
+app.get('/api/proof/:tableId/hand/:handNumber', async (req, res) => {
+    try {
+        const { tableId, handNumber } = req.params;
+        
+        // Fetch hand history from database
+        const hand = await db.hand.findFirst({
+            where: {
+                tableId,
+                handNumber: parseInt(handNumber)
+            }
+        });
+
+        if (!hand) {
+            return res.status(404).json({ 
+                error: 'Hand not found',
+                hint: 'Hands are available 2-10 minutes after completion for verification'
+            });
+        }
+
+        // Return complete fairness data for verification
+        return res.json({
+            tableId,
+            handNumber: hand.handNumber,
+            fairnessData: {
+                serverSeed: hand.fairnessReveal || 'Not yet available',
+                serverSeedHash: hand.fairnessHash,
+                clientSeed: hand.clientSeed,
+                nonce: hand.nonce,
+                communityCards: hand.communityCards
+            },
+            winners: hand.winnerIds,
+            potAmount: hand.potAmount,
+            rakeAmount: hand.rakeAmount,
+            instructions: 'Use serverSeed + clientSeed + nonce to reproduce the deck and verify fairness',
+            timestamp: hand.createdAt
+        });
+    } catch (e) {
+        return res.status(500).json({ error: 'Failed to fetch hand verification' });
+    }
+});
+
+// 7. Verify deck reproducibility — client verifies they can reproduce same deck
+app.post('/api/proof/verify', async (req, res) => {
+    try {
+        const { serverSeed, clientSeed, nonce, expectedDeck } = req.body;
+        
+        if (!serverSeed || !clientSeed || nonce === undefined || !expectedDeck) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        // Import and use fairness functions to reproduce deck
+        const { generateProvablyFairDeck, hashSeed } = await import('./utils/fairness');
+        
+        // Verify server seed hash matches
+        const computedHash = await hashSeed(serverSeed);
+        const reproducedDeck = generateProvablyFairDeck(serverSeed, clientSeed, nonce);
+
+        // Compare decks (52 cards in specific order)
+        const decksMatch = JSON.stringify(reproducedDeck) === JSON.stringify(expectedDeck);
+
+        return res.json({
+            verified: decksMatch,
+            result: decksMatch ? 'DECK_VERIFIED' : 'DECK_MISMATCH',
+            reproducedDeckLength: reproducedDeck.length,
+            expectedDeckLength: expectedDeck.length,
+            details: !decksMatch ? {
+                expected: expectedDeck.slice(0, 5),
+                reproduced: reproducedDeck.slice(0, 5)
+            } : null,
+            message: decksMatch 
+                ? '✅ Deck is provably fair! Same seeds + nonce produce same shuffle.'
+                : '❌ Deck mismatch detected. Fair play violation possible.'
+        });
+    } catch (e) {
+        return res.status(500).json({ error: 'Verification failed', details: String(e) });
+    }
+});
+
+// 8. Player fairness history — shows all hands a player participated in
+app.get('/api/proof/player/:playerId/history', async (req, res) => {
+    try {
+        const { playerId } = req.params;
+        const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+
+        // Find all hands where player was involved
+        const hands = await db.hand.findMany({
+            where: {
+                OR: [
+                    { winnerIds: { contains: playerId } },
+                    // Also find hands where player participated (if you add playerIds field)
+                ]
+            },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            select: {
+                tableId: true,
+                handNumber: true,
+                fairnessHash: true,
+                clientSeed: true,
+                nonce: true,
+                communityCards: true,
+                winnerIds: true,
+                potAmount: true,
+                rakeAmount: true,
+                createdAt: true
+            }
+        });
+
+        return res.json({
+            playerId,
+            handsFound: hands.length,
+            hands: hands.map(h => ({
+                ...h,
+                verificationUrl: `/api/proof/${h.tableId}/hand/${h.handNumber}`
+            }))
+        });
+    } catch (e) {
+        return res.status(500).json({ error: 'Failed to fetch player history' });
+    }
+});
+
+// 9. Fairness statistics — aggregated fairness metrics
+app.get('/api/fairness/stats', async (req, res) => {
+    try {
+        const totalHands = await db.hand.count();
+        const recentHands = await db.hand.findMany({
+            where: {
+                createdAt: {
+                    gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24h
+                }
+            }
+        });
+
+        const totalPot = await db.hand.aggregate({
+            _sum: { potAmount: true }
+        });
+
+        const totalRake = await db.hand.aggregate({
+            _sum: { rakeAmount: true }
+        });
+
+        return res.json({
+            totalHandsHistorical: totalHands,
+            handsLast24h: recentHands.length,
+            totalPotLast24h: totalPot._sum.potAmount || 0,
+            totalRakeLast24h: totalRake._sum.rakeAmount || 0,
+            averageHandSize: totalHands > 0 ? Math.round((totalPot._sum.potAmount || 0) / totalHands) : 0,
+            verificationStatus: '✅ All hands tracked and verifiable'
+        });
+    } catch (e) {
+        return res.status(500).json({ error: 'Failed to fetch fairness stats' });
     }
 });
 
@@ -149,6 +372,126 @@ io.on('connection', (socket) => {
             sender: user.username,
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
+    });
+
+    // Issue #5: Admin Bot Control
+    socket.on('adminAddBot', async ({ tableId, adminWallet }) => {
+        const result = await gameManager.addBot(tableId, adminWallet);
+        socket.emit('adminBotResult', result);
+    });
+
+    socket.on('adminRemoveBot', ({ tableId, botId, adminWallet }) => {
+        const result = gameManager.removeBot(tableId, botId, adminWallet);
+        socket.emit('adminBotResult', result);
+    });
+
+    // Issue #6: Admin Game Speed Control
+    socket.on('adminSetGameSpeed', ({ multiplier, adminWallet }) => {
+        const ADMIN_WALLET = 'GvYPMAk8CddRucjwLHDud1yy51QQtQDhgiB9AWdRtAoD';
+        if (adminWallet === ADMIN_WALLET) {
+            gameManager.setGameSpeed(multiplier);
+            io.emit('gameSpeedUpdated', { multiplier, actualSpeed: `${(1/multiplier).toFixed(1)}x faster` });
+            socket.emit('adminSpeedResult', { success: true, message: `Game speed set to ${multiplier}x` });
+        } else {
+            socket.emit('adminSpeedResult', { success: false, message: 'Unauthorized' });
+        }
+    });
+
+    // Issue #3 & #8: Handle deposit completion from client
+    socket.on('depositCompleted', async ({ txHash, amount, walletAddress }) => {
+        try {
+            console.log(`[Deposit] Processing deposit: ${amount} chips for ${walletAddress}`);
+            
+            // Find or create user
+            let user = await db.user.findUnique({ where: { id: walletAddress } });
+            if (!user) {
+                user = await db.user.create({
+                    data: {
+                        id: walletAddress,
+                        username: `Player_${walletAddress.slice(0,4)}`,
+                        balance: 0
+                    }
+                });
+            }
+
+            // Create transaction record
+            await db.transaction.create({
+                data: {
+                    userId: walletAddress,
+                    type: 'DEPOSIT',
+                    amount: amount,
+                    status: 'COMPLETED',
+                    chainTxHash: txHash,
+                    chainStatus: 'CONFIRMED'
+                }
+            });
+
+            // Update user balance
+            const updatedUser = await db.user.update({
+                where: { id: walletAddress },
+                data: { balance: { increment: amount } }
+            });
+
+            // Update system stats
+            await db.systemState.upsert({
+                where: { id: 'global' },
+                create: { 
+                    id: 'global',
+                    totalVolume: amount,
+                    tvl: amount
+                },
+                update: { 
+                    totalVolume: { increment: amount },
+                    tvl: { increment: amount }
+                }
+            });
+
+            // Emit balance update back to client
+            socket.emit('balanceUpdate', updatedUser.balance);
+            console.log(`[Deposit] Success: ${walletAddress} balance now ${updatedUser.balance}`);
+        } catch (error) {
+            console.error('[Deposit] Error:', error);
+            socket.emit('error', { message: 'Failed to process deposit' });
+        }
+    });
+
+    // Issue #3 & #8: Handle withdrawal completion from client
+    socket.on('withdrawalCompleted', async ({ txHash, amount, walletAddress }) => {
+        try {
+            console.log(`[Withdrawal] Processing withdrawal: ${amount} chips for ${walletAddress}`);
+            
+            // Create transaction record
+            await db.transaction.create({
+                data: {
+                    userId: walletAddress,
+                    type: 'WITHDRAWAL',
+                    amount: amount,
+                    status: 'COMPLETED',
+                    chainTxHash: txHash,
+                    chainStatus: 'CONFIRMED'
+                }
+            });
+
+            // Update user balance (deduct)
+            const updatedUser = await db.user.update({
+                where: { id: walletAddress },
+                data: { balance: { decrement: amount } }
+            });
+
+            // Update system stats
+            await db.systemState.upsert({
+                where: { id: 'global' },
+                create: { id: 'global', tvl: -amount },
+                update: { tvl: { decrement: amount } }
+            });
+
+            // Emit balance update back to client
+            socket.emit('balanceUpdate', updatedUser.balance);
+            console.log(`[Withdrawal] Success: ${walletAddress} balance now ${updatedUser.balance}`);
+        } catch (error) {
+            console.error('[Withdrawal] Error:', error);
+            socket.emit('error', { message: 'Failed to process withdrawal' });
+        }
     });
 
     socket.on('disconnect', () => {

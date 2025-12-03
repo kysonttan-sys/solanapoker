@@ -16,6 +16,7 @@ model SystemState {
   jackpot       Float    @default(0)
   tvl           Float    @default(0)
   totalVolume   Float    @default(0)
+  totalHands    Int      @default(0)  // Added for Issue #2
   activePlayers Int      @default(0)
   updatedAt     DateTime @updatedAt
 }
@@ -33,32 +34,85 @@ model User {
   vipRank         Int           @default(0) // 0=None, 1-3=VIP levels
   isVerified      Boolean       @default(false)
   referralCode    String?       @unique
+  referredBy      String?       // Who referred this user (referral code)
   referralRank    Int           @default(0) // 0=Scout, 1=Agent, 2=Broker, 3=Partner
   hostRank        Int           @default(0) // 0=Dealer to 4=Mogul
   
+  // Blockchain Sync Fields
+  onChainBalance  Float         @default(0)     // On-chain SOL/token balance
+  walletVerified  Boolean       @default(false) // Did we verify ownership?
+  lastChainSync   DateTime?                     // Last blockchain sync timestamp
+  
   // Relationships
   transactions    Transaction[]
+  hands           Hand[]
   
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   
   @@index([username])
   @@index([totalWinnings])
+  @@index([walletVerified])
 }
 
 // Transaction Log
 model Transaction {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  type      String   // GAME_BUYIN, GAME_WIN, WITHDRAWAL, DEPOSIT, STAKING, etc.
-  amount    Float
-  status    String   @default("COMPLETED") // COMPLETED, PENDING, FAILED
+  type          String   // GAME_BUYIN, GAME_WIN, WITHDRAWAL, DEPOSIT, STAKING, RAKE, etc.
+  amount        Float
+  status        String   @default("COMPLETED") // COMPLETED, PENDING, FAILED
   
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // Blockchain Tracking
+  chainTxHash   String?                    // Solana transaction signature
+  chainStatus   String   @default("PENDING") // PENDING|CONFIRMED|FAILED
+  
+  // Game Context
+  handId        String?                    // Link to Hand record if game-related
+  hand          Hand?    @relation(fields: [handId], references: [id])
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
   
   @@index([userId])
+  @@index([createdAt])
+  @@index([chainTxHash])
+  @@index([handId])
+}
+
+// Hand History for Fairness Verification
+model Hand {
+  id                String     @id @default(cuid())
+  userId            String
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  tableId           String
+  handNumber        Int
+  
+  // Players & Results
+  winnerIds         String     // JSON array of wallet addresses
+  potAmount         Float
+  rakeAmount        Float      @default(0)
+  
+  // Game State
+  communityCards    String     // JSON serialized: CardData[]
+  finalBoardState   String?    // JSON of final GameState
+  
+  // Fairness & Verification
+  fairnessHash      String     // Server seed hash (public)
+  fairnessReveal    String?    // Server seed reveal (after hand ends)
+  clientSeed        String?    // Client seed
+  nonce             Int?       // Hand sequence number
+  
+  // Transactions
+  transactions      Transaction[]
+  
+  createdAt         DateTime   @default(now())
+  
+  @@index([userId])
+  @@index([tableId])
+  @@index([handNumber])
   @@index([createdAt])
 }

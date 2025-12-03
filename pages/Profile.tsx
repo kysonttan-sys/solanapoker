@@ -8,96 +8,65 @@ import {
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
-import { MOCK_USER, MOCK_STATS, LEADERBOARD_DATA, getVipStatus, REFERRAL_TIERS, getHostStatus } from '../constants';
+import { MOCK_USER, MOCK_STATS, LEADERBOARD_DATA, getVipStatus, REFERRAL_TIERS, getHostStatus, ADMIN_WALLET_ADDRESS } from '../constants';
 import { User } from '../types';
-import { Camera, Mail, AtSign, Wallet, Save, X, Image as ImageIcon, Lock, Trophy, TrendingUp, TrendingDown, Eye, Copy, Check, Users, Gift, Coins, Share2, DollarSign, PieChart as PieChartIcon, Crown, Network, Activity, Target, Clock, Settings, FileText, QrCode, Volume2, VolumeX, Palette, ArrowUpCircle, ArrowDownCircle, Ghost, EyeOff, Shield, UserPlus, MessageSquare, Trash2, Circle, Search, Send, ExternalLink, AlertTriangle, Loader2 } from 'lucide-react';
+import { Camera, Mail, AtSign, Wallet, Save, X, Image as ImageIcon, Lock, Trophy, TrendingUp, TrendingDown, Eye, Copy, Check, Users, Gift, Coins, Share2, DollarSign, PieChart as PieChartIcon, Crown, Network, Activity, Target, Clock, Settings, FileText, QrCode, Volume2, VolumeX, Palette, ArrowUpCircle, ArrowDownCircle, Ghost, EyeOff, Shield, UserPlus, MessageSquare, Trash2, Circle, Search, Send, ExternalLink, AlertTriangle, Loader2, Database, Terminal } from 'lucide-react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { withdrawFromVault } from '../utils/solanaContract';
 
-// --- MOCK DASHBOARD DATA ---
-const DATA_1W = [
-  { name: 'Mon', pnl: 400 },
-  { name: 'Tue', pnl: 300 },
-  { name: 'Wed', pnl: -200 },
-  { name: 'Thu', pnl: 800 },
-  { name: 'Fri', pnl: 1200 },
-  { name: 'Sat', pnl: 900 },
-  { name: 'Sun', pnl: 2400 },
-];
+// --- REAL USER DATA (Backend will populate from transactions) ---
+// Data will be fetched from /api/user/:id endpoint
+const DATA_1W: any[] = [];
+const DATA_1M: any[] = [];
+const DATA_3M: any[] = [];
+const DATA_YTD: any[] = [];
+const DATA_ALL: any[] = [];
 
-const DATA_1M = [
-  { name: 'Week 1', pnl: 1500 },
-  { name: 'Week 2', pnl: -500 },
-  { name: 'Week 3', pnl: 2200 },
-  { name: 'Week 4', pnl: 3400 },
-];
-
-const DATA_3M = [
-  { name: 'Jan', pnl: 4500 },
-  { name: 'Feb', pnl: 3200 },
-  { name: 'Mar', pnl: 6800 },
-];
-
-const DATA_YTD = [
-  { name: 'Jan', pnl: 4500 },
-  { name: 'Feb', pnl: 3200 },
-  { name: 'Mar', pnl: 6800 },
-  { name: 'Apr', pnl: 5100 },
-  { name: 'May', pnl: -1200 },
-  { name: 'Jun', pnl: 8400 },
-];
-
-const DATA_ALL = [
-  { name: '2021', pnl: 12000 },
-  { name: '2022', pnl: -4000 },
-  { name: '2023', pnl: 25000 },
-  { name: '2024', pnl: 18500 },
-];
-
+// Stats will be calculated from real user transaction data
 const STATS_BY_TIMEFRAME: any = {
   '1W': {
-    winnings: 4800,
-    winRate: 8.5,
-    hands: 1240,
-    tournamentsWon: 1,
-    tournamentsPlayed: 5,
-    trendWinnings: '+12.5%',
-    trendWinRate: '+1.2',
-    trendHands: '+150',
-    trendTourney: '20% ITM',
-    handsDistribution: { royal: 0, straightFlush: 0, quads: 2, fullHouse: 14 }
+    winnings: 0,
+    winRate: 0,
+    hands: 0,
+    tournamentsWon: 0,
+    tournamentsPlayed: 0,
+    trendWinnings: '0%',
+    trendWinRate: '0',
+    trendHands: '0',
+    trendTourney: '0% ITM',
+    handsDistribution: { royal: 0, straightFlush: 0, quads: 0, fullHouse: 0 }
   },
   '1M': {
-    winnings: 6600,
-    winRate: 6.2,
-    hands: 5400,
-    tournamentsWon: 3,
-    tournamentsPlayed: 18,
-    trendWinnings: '-5.2%',
-    trendWinRate: '-0.5',
-    trendHands: '+800',
-    trendTourney: '16% ITM',
-    handsDistribution: { royal: 0, straightFlush: 1, quads: 8, fullHouse: 45 }
+    winnings: 0,
+    winRate: 0,
+    hands: 0,
+    tournamentsWon: 0,
+    tournamentsPlayed: 0,
+    trendWinnings: '0%',
+    trendWinRate: '0',
+    trendHands: '0',
+    trendTourney: '0% ITM',
+    handsDistribution: { royal: 0, straightFlush: 0, quads: 0, fullHouse: 0 }
   },
   '3M': {
-    winnings: 14500,
-    winRate: 5.8,
-    hands: 12500,
-    tournamentsWon: 5,
-    tournamentsPlayed: 42,
-    trendWinnings: '+24.0%',
-    trendWinRate: '+0.1',
-    trendHands: '+2200',
-    trendTourney: '12% ITM',
-    handsDistribution: { royal: 1, straightFlush: 2, quads: 15, fullHouse: 112 }
+    winnings: 0,
+    winRate: 0,
+    hands: 0,
+    tournamentsWon: 0,
+    tournamentsPlayed: 0,
+    trendWinnings: '0%',
+    trendWinRate: '0',
+    trendHands: '0',
+    trendTourney: '0% ITM',
+    handsDistribution: { royal: 0, straightFlush: 0, quads: 0, fullHouse: 0 }
   },
   'YTD': {
-    winnings: 26800,
-    winRate: 5.4,
-    hands: 28900,
-    tournamentsWon: 8,
-    tournamentsPlayed: 85,
-    trendWinnings: '+140%',
+    winnings: 0,
+    winRate: 0,
+    hands: 0,
+    tournamentsWon: 0,
+    tournamentsPlayed: 0,
+    trendWinnings: '0%',
     trendWinRate: '-0.2',
     trendHands: '+15000',
     trendTourney: '9% ITM',
@@ -164,7 +133,7 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
   const [isEditing, setIsEditing] = useState(false);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'friends' | 'vip' | 'ecosystem' | 'history' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'friends' | 'vip' | 'ecosystem' | 'history' | 'settings' | 'admin'>('overview');
   const [timeRange, setTimeRange] = useState('1W');
   const [isQrOpen, setIsQrOpen] = useState(false);
   
@@ -435,14 +404,25 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
   };
   const currentStats = STATS_BY_TIMEFRAME[timeRange];
 
-  if (!profileForm) return <div className="p-8 text-center text-sol-green animate-pulse">Loading Profile...</div>;
-
-  const vipStatus = getVipStatus(stats.totalHands);
-  const currentReferralTier = REFERRAL_TIERS[profileForm.referralRank || 0];
-  const nextReferralTier = profileForm.referralRank !== undefined && profileForm.referralRank < 3 ? REFERRAL_TIERS[profileForm.referralRank + 1] : null;
+  // Calculate derived values before early return
+  const vipStatus = profileForm ? getVipStatus(stats.totalHands) : null;
+  const currentReferralTier = profileForm ? REFERRAL_TIERS[profileForm.referralRank || 0] : null;
+  const nextReferralTier = profileForm && profileForm.referralRank !== undefined && profileForm.referralRank < 3 ? REFERRAL_TIERS[profileForm.referralRank + 1] : null;
 
   // Host Rank Logic
-  const currentHostStatus = getHostStatus(profileForm.ecosystemStats?.totalHostRevenueGenerated || 0);
+  const currentHostStatus = profileForm ? getHostStatus(profileForm.ecosystemStats?.totalHostRevenueGenerated || 0) : null;
+
+  // Early return AFTER calculating all values
+  if (!profileForm || !vipStatus) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#0B0B0F]">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-sol-green border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Derive Friends List
   const friendsList = profileForm.friends?.map(fid => {
@@ -666,6 +646,14 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
                   >
                       <Settings size={16} /> Settings
                   </button>
+                  {profileForm?.walletAddress === ADMIN_WALLET_ADDRESS && (
+                      <button 
+                        onClick={() => setActiveTab('admin')}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'admin' ? 'border-red-500 text-white' : 'border-transparent text-gray-400 hover:text-white'}`}
+                      >
+                          <Shield size={16} /> Admin Panel
+                      </button>
+                  )}
               </div>
           )}
 
@@ -1228,6 +1216,106 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
                         </div>
                     </form>
                  </div>
+              </div>
+          )}
+
+          {/* Admin Tab - Only visible for ADMIN_WALLET_ADDRESS */}
+          {activeTab === 'admin' && profileForm?.walletAddress === ADMIN_WALLET_ADDRESS && (
+              <div className="space-y-6 animate-in slide-in-from-right-4">
+                  <div className="bg-red-900/20 border border-red-500/50 rounded-xl p-6 mb-6">
+                      <div className="flex items-center gap-3">
+                          <Shield size={24} className="text-red-500" />
+                          <div>
+                              <h3 className="text-lg font-bold text-white">Administrator Access</h3>
+                              <p className="text-sm text-gray-400">Full system control and monitoring capabilities</p>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      <Card>
+                          <div className="flex items-center gap-3 mb-4">
+                              <div className="p-2 bg-blue-500/20 rounded-lg">
+                                  <Users size={20} className="text-blue-400" />
+                              </div>
+                              <h3 className="text-lg font-bold text-white">User Management</h3>
+                          </div>
+                          <p className="text-gray-400 text-sm mb-4">Manage user accounts, balances, and permissions</p>
+                          <Button onClick={() => navigate('/admin')} variant="outline" className="w-full">
+                              Open Full Admin Panel
+                          </Button>
+                      </Card>
+
+                      <Card>
+                          <div className="flex items-center gap-3 mb-4">
+                              <div className="p-2 bg-purple-500/20 rounded-lg">
+                                  <Activity size={20} className="text-purple-400" />
+                              </div>
+                              <h3 className="text-lg font-bold text-white">System Monitoring</h3>
+                          </div>
+                          <p className="text-gray-400 text-sm mb-4">Monitor games, transactions, and system health</p>
+                          <Button onClick={() => navigate('/admin')} variant="outline" className="w-full">
+                              View System Logs
+                          </Button>
+                      </Card>
+
+                      <Card>
+                          <div className="flex items-center gap-3 mb-4">
+                              <div className="p-2 bg-green-500/20 rounded-lg">
+                                  <DollarSign size={20} className="text-green-400" />
+                              </div>
+                              <h3 className="text-lg font-bold text-white">Vault Management</h3>
+                          </div>
+                          <p className="text-gray-400 text-sm mb-4">Monitor protocol vault and liquidity</p>
+                          <Button onClick={() => navigate('/admin')} variant="outline" className="w-full">
+                              View Vault Details
+                          </Button>
+                      </Card>
+                  </div>
+
+                  <Card>
+                      <div className="p-4 border-b border-white/10">
+                          <h3 className="text-lg font-bold text-white">Quick Actions</h3>
+                      </div>
+                      <div className="p-6 space-y-4">
+                          <Button 
+                              onClick={() => navigate('/admin')} 
+                              className="w-full justify-start gap-3"
+                          >
+                              <Database size={18} />
+                              View All Users
+                          </Button>
+                          <Button 
+                              onClick={() => navigate('/admin')} 
+                              className="w-full justify-start gap-3"
+                              variant="outline"
+                          >
+                              <Eye size={18} />
+                              Spectate Games
+                          </Button>
+                          <Button 
+                              onClick={() => navigate('/admin')} 
+                              className="w-full justify-start gap-3"
+                              variant="outline"
+                          >
+                              <Terminal size={18} />
+                              System Logs
+                          </Button>
+                      </div>
+                  </Card>
+
+                  <div className="bg-yellow-900/20 border border-yellow-500/50 rounded-xl p-4">
+                      <div className="flex items-start gap-3">
+                          <AlertTriangle size={20} className="text-yellow-500 mt-0.5" />
+                          <div>
+                              <h4 className="font-medium text-white mb-1">Admin Access Notice</h4>
+                              <p className="text-sm text-gray-400">
+                                  This tab is only visible because your wallet ({profileForm.walletAddress.slice(0, 4)}...{profileForm.walletAddress.slice(-4)}) 
+                                  is registered as the protocol administrator. Use these tools responsibly.
+                              </p>
+                          </div>
+                      </div>
+                  </div>
               </div>
           )}
 

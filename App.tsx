@@ -18,8 +18,10 @@ import { AboutUs } from './pages/AboutUs';
 import { RulesOfPoker } from './pages/RulesOfPoker';
 import { FAQ } from './pages/FAQ';
 import { Support } from './pages/Support';
+import { FairnessVerification } from './pages/FairnessVerification';
 import { CreateGameModal } from './components/CreateGameModal';
 import { ConnectWalletModal } from './components/ConnectWalletModal';
+import { DepositWithdraw } from './components/DepositWithdraw';
 import { CookieConsent } from './components/CookieConsent';
 import { TurnDeviceOverlay } from './components/TurnDeviceOverlay';
 import { TestnetDisclaimer } from './components/TestnetDisclaimer';
@@ -44,11 +46,32 @@ const AppContent: React.FC = () => {
   // Auth State
   const [user, setUser] = useState<User | null>(null);
   
+  // Cookie Consent State (Issue #7: Enforce cookie acceptance)
+  const [cookieConsent, setCookieConsent] = useState<boolean | null>(null);
+  
+  useEffect(() => {
+    // Check existing consent on mount
+    const consent = localStorage.getItem('solpoker_cookie_consent');
+    setCookieConsent(consent === 'accepted' ? true : consent === 'declined' ? false : null);
+  }, []);
+
+  const handleConsentChange = (accepted: boolean) => {
+    setCookieConsent(accepted);
+  };
+  
   // Sync User state with Wallet Connection and Fetch Balance
   useEffect(() => {
       const initializeUser = async () => {
           if (connected && publicKey) {
               const address = publicKey.toBase58();
+              
+              // Check if wallet changed from current user
+              if (user && user.walletAddress !== address) {
+                  console.log(`[Wallet Change] Detected wallet change from ${user.walletAddress} to ${address}`);
+                  // Clear old user data and force re-initialization
+                  setUser(null);
+              }
+              
               let solBalance = 0;
               
               // Fetch real SOL balance
@@ -95,7 +118,7 @@ const AppContent: React.FC = () => {
       };
 
       initializeUser();
-  }, [connected, publicKey, connection]);
+  }, [connected, publicKey, connection, user?.walletAddress]);
 
   // Persist User updates to LocalStorage keyed by Wallet Address
   const handleUserUpdate = (updatedUser: User) => {
@@ -112,6 +135,7 @@ const AppContent: React.FC = () => {
   // Modal State
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
+  const [isDepositWithdrawOpen, setIsDepositWithdrawOpen] = useState(false);
   const [createGameType, setCreateGameType] = useState<GameType>(GameType.CASH);
 
   const handleVerification = () => {
@@ -127,6 +151,11 @@ const AppContent: React.FC = () => {
   };
 
   const openCreateModal = (type: GameType) => {
+    // Issue #7: Enforce cookie consent before actions
+    if (cookieConsent !== true) {
+        alert('Please accept cookies to use this feature.');
+        return;
+    }
     if (!connected) {
         setIsWalletModalOpen(true); // Open Custom Wallet Modal
         return;
@@ -136,8 +165,19 @@ const AppContent: React.FC = () => {
   };
 
   const handleJoinGame = (gameId: string) => {
+      // Issue #7: Enforce cookie consent before actions
+      if (cookieConsent !== true) {
+          alert('Please accept cookies to join games.');
+          return;
+      }
       if (!connected) {
           setIsWalletModalOpen(true); // Open Custom Wallet Modal
+          return;
+      }
+      // Issue #6: Bot prevention - verify before joining
+      if (user && !user.isVerified) {
+          alert('Please complete bot verification before joining games.');
+          handleVerification();
           return;
       }
       navigate(`/game/${gameId}`);
@@ -165,6 +205,7 @@ const AppContent: React.FC = () => {
                <Navbar 
                 user={user} 
                 onOpenWalletModal={() => setIsWalletModalOpen(true)}
+                onOpenDepositWithdraw={() => setIsDepositWithdrawOpen(true)}
                />
            } />
         </Routes>
@@ -196,6 +237,7 @@ const AppContent: React.FC = () => {
             <Route path="/staking" element={<Staking user={user} onUserUpdate={handleUserUpdate} />} />
             <Route path="/swap" element={<Swap user={user} />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/fairness" element={<FairnessVerification />} />
             <Route path="/terms" element={<TermsOfUse />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/cookies" element={<CookiePolicy />} />
@@ -219,10 +261,10 @@ const AppContent: React.FC = () => {
               element={<GameRoom tables={tables} tournaments={tournaments} user={user} onVerify={handleVerification} onBalanceUpdate={handleBalanceUpdate} />} 
             />
             
-            {/* Admin Route */}
+            {/* Admin Route - Let Admin component handle loading/auth */}
             <Route 
               path="/admin" 
-              element={user ? <Admin user={user} /> : <Navigate to="/" replace />} 
+              element={<Admin user={user} />} 
             />
           </Routes>
         </main>
@@ -239,7 +281,12 @@ const AppContent: React.FC = () => {
             onClose={() => setIsWalletModalOpen(false)}
         />
 
-        <CookieConsent />
+        <DepositWithdraw 
+            isOpen={isDepositWithdrawOpen}
+            onClose={() => setIsDepositWithdrawOpen(false)}
+        />
+
+        <CookieConsent onConsentChange={handleConsentChange} />
         
         {/* Footer - Hide on Game Room */}
         <Routes>
