@@ -34,7 +34,12 @@ export class GameManager {
             occupiedSeats: table.players.filter(p => p.status !== 'sitting-out').length,
             smallBlind: table.smallBlind,
             bigBlind: table.bigBlind,
-            gameMode: table.gameMode
+            buyInMin: table.bigBlind * 50, // Standard 50 BB min
+            buyInMax: table.bigBlind * 200, // Standard 200 BB max
+            gameMode: table.gameMode,
+            type: table.gameMode === 'fun' ? 'FUN' : 'CASH', // Add type for frontend
+            speed: 'REGULAR', // Default speed
+            isPrivate: false // Default not private
         }));
     }
 
@@ -254,6 +259,16 @@ export class GameManager {
                     const t = this.tables.get(tableId);
                     if (t) {
                         try {
+                            // Check if we have enough active players
+                            const activePlayers = t.players.filter((p: any) => 
+                                p.status === 'active' && p.balance > t.bigBlind
+                            );
+                            
+                            if (activePlayers.length < 2) {
+                                console.log(`[GameFlow] Not enough active players (${activePlayers.length}) for next hand at table ${tableId}`);
+                                return;
+                            }
+                            
                             const serverSeed = generateServerSeed();
                             const serverHash = hashSeed(serverSeed);
                             const clientSeed = t.fairness?.clientSeed || `client_${Date.now()}`;
@@ -275,7 +290,7 @@ export class GameManager {
                             const nextState = PokerEngine.dealHand(t, deck, newFairness);
                             this.tables.set(tableId, nextState);
                             this.broadcastState(tableId);
-                            console.log(`[GameFlow] Next hand dealt for table ${tableId}`);
+                            console.log(`[GameFlow] Next hand dealt for table ${tableId}, Hand #${nextState.handNumber}`);
                         } catch (e) {
                             console.error('Error generating next hand deck', e);
                         }
@@ -289,14 +304,32 @@ export class GameManager {
         for (const [tableId, table] of this.tables.entries()) {
             const player = table.players.find((p: any) => p.socketId === socket.id);
             if (player) {
-                // Note: Balance sync handled via deposit/withdrawal events
-
+                console.log(`[Disconnect] Player ${player.name} (${player.id}) leaving table ${tableId} with balance: ${player.balance}`);
+                
+                // Return table chips to database balance
                 if (player.balance > 0 && !player.id.startsWith('bot_')) {
-                    await db.user.update({
-                        where: { id: player.id },
-                        data: { balance: { increment: player.balance } }
-                    });
+                    try {
+                        const updatedUser = await db.user.update({
+                            where: { id: player.id },
+                            data: { balance: { increment: player.balance } }
+                        });
+                        
+                        // Log the cashout transaction
+                        await db.transaction.create({
+                            data: {
+                                userId: player.id,
+                                type: 'GAME_CASHOUT',
+                                amount: player.balance,
+                                status: 'COMPLETED'
+                            }
+                        });
+                        
+                        console.log(`[Disconnect] ✅ Returned ${player.balance} chips to ${player.name}. New DB balance: ${updatedUser.balance}`);
+                    } catch (error) {
+                        console.error(`[Disconnect] ❌ Failed to return balance to ${player.id}:`, error);
+                    }
                 }
+                
                 const updatedTable = {
                     ...table,
                     players: table.players.filter(p => p.id !== player.id)

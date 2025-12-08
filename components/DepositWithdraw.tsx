@@ -12,9 +12,14 @@ interface TransactionStatus {
     txHash?: string;
 }
 
-export const DepositWithdraw: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
+export const DepositWithdraw: React.FC<{ 
+    isOpen: boolean; 
+    onClose: () => void;
+    onBalanceUpdate?: (newBalance: number) => void;
+}> = ({
     isOpen,
-    onClose
+    onClose,
+    onBalanceUpdate
 }) => {
     const { publicKey, wallet, connected, sendTransaction } = useWallet();
     const { connection } = useConnection();
@@ -42,12 +47,15 @@ export const DepositWithdraw: React.FC<{ isOpen: boolean; onClose: () => void }>
         
         const fetchBalances = async () => {
             try {
-                // Fetch in-game balance from server (via socket or API)
-                if (socket) {
-                    socket.emit('getBalance', { walletAddress: publicKey.toString() });
-                    socket.on('balanceUpdate', (bal: number) => {
-                        setBalance(bal);
-                    });
+                // Fetch in-game balance from backend API
+                const response = await fetch(`http://localhost:4000/api/user/${publicKey.toString()}`);
+                if (response.ok) {
+                    const userData = await response.json();
+                    setBalance(userData.balance);
+                    console.log('[DepositWithdraw] In-game balance loaded:', userData.balance);
+                } else {
+                    console.warn('[DepositWithdraw] User not found in database');
+                    setBalance(0);
                 }
                 
                 // Get wallet SOL balance
@@ -61,6 +69,18 @@ export const DepositWithdraw: React.FC<{ isOpen: boolean; onClose: () => void }>
         };
 
         fetchBalances();
+        
+        // Listen for balance updates from server
+        if (socket) {
+            socket.on('balanceUpdate', (bal: number) => {
+                console.log('[DepositWithdraw] Balance update received from server:', bal);
+                setBalance(bal);
+                // Notify parent component to update global balance
+                if (onBalanceUpdate) {
+                    onBalanceUpdate(bal);
+                }
+            });
+        }
         
         return () => {
             if (socket) {
@@ -124,7 +144,13 @@ export const DepositWithdraw: React.FC<{ isOpen: boolean; onClose: () => void }>
             }
             
             // Update local balance display
-            setBalance(prev => prev + chips);
+            const newBalance = balance + chips;
+            setBalance(newBalance);
+            
+            // Notify parent to update global user balance
+            if (onBalanceUpdate) {
+                onBalanceUpdate(newBalance);
+            }
         } catch (error) {
             console.error('Deposit error:', error);
             setTxStatus({
@@ -191,7 +217,13 @@ export const DepositWithdraw: React.FC<{ isOpen: boolean; onClose: () => void }>
             }
             
             // Update local balance display
-            setBalance(prev => Math.max(0, prev - chips));
+            const newBalance = Math.max(0, balance - chips);
+            setBalance(newBalance);
+            
+            // Notify parent to update global user balance
+            if (onBalanceUpdate) {
+                onBalanceUpdate(newBalance);
+            }
         } catch (error) {
             console.error('Withdrawal error:', error);
             setTxStatus({

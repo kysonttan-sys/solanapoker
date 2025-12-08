@@ -72,44 +72,46 @@ const AppContent: React.FC = () => {
                   setUser(null);
               }
               
-              let solBalance = 0;
-              
-              // Fetch real SOL balance
-              try {
-                  const lamports = await connection.getBalance(publicKey);
-                  const realSol = lamports / LAMPORTS_PER_SOL;
-                  
-                  // DEVELOPER TEST MODE: 1 SOL = 100,000 USDT (Chips)
-                  solBalance = realSol * 100000;
-                  
-                  console.log(`[DevTest] Wallet connected: ${address}`);
-                  console.log(`[DevTest] Real SOL: ${realSol}, Game Balance: ${solBalance}`);
-              } catch (e) {
-                  console.error("Failed to fetch wallet balance", e);
-              }
-
-              const savedUserStr = localStorage.getItem(`solpoker_user_${address}`);
+              // Fetch user data from backend database
               let currentUser: User;
-
-              if (savedUserStr) {
-                  currentUser = JSON.parse(savedUserStr);
-                  // Ensure wallet address matches connected wallet
-                  if (currentUser.walletAddress !== address) {
-                      currentUser.walletAddress = address;
+              try {
+                  const response = await fetch(`http://localhost:4000/api/user/${address}`);
+                  if (response.ok) {
+                      const userData = await response.json();
+                      currentUser = {
+                          id: userData.id,
+                          walletAddress: userData.walletAddress,
+                          username: userData.username,
+                          balance: userData.balance, // Use database balance (reflects deposits)
+                          isVerified: true,
+                          avatarUrl: userData.avatarUrl || `https://ui-avatars.com/api/?name=${address}`
+                      };
+                      console.log(`[User] Loaded from database - Balance: ${userData.balance} chips`);
+                  } else {
+                      // User doesn't exist in database, will be auto-created on first API call
+                      currentUser = {
+                          ...MOCK_USER,
+                          id: address,
+                          walletAddress: address,
+                          username: `Player_${address.slice(0,4)}`,
+                          balance: 0, // Start with 0 until they deposit
+                          isVerified: true
+                      };
+                      console.log(`[User] New user detected - Balance: 0 (deposit required)`);
                   }
-                  // Update balance to reflect real wallet SOL (with Dev conversion)
-                  currentUser.balance = solBalance;
-              } else {
-                  // Create New User for this wallet
+              } catch (e) {
+                  console.error("Failed to fetch user from database", e);
+                  // Fallback to local user with 0 balance
                   currentUser = {
-                      ...MOCK_USER, // Inherit defaults/mocks for demo
+                      ...MOCK_USER,
                       id: address,
                       walletAddress: address,
                       username: `Player_${address.slice(0,4)}`,
-                      balance: solBalance, // Set initial balance from wallet
+                      balance: 0,
                       isVerified: true
                   };
               }
+              
               setUser(currentUser);
               localStorage.setItem(`solpoker_user_${address}`, JSON.stringify(currentUser));
           } else {
@@ -129,8 +131,54 @@ const AppContent: React.FC = () => {
   };
 
   // Data State (Lifted from constants to allow updates)
-  const [tables, setTables] = useState<PokerTable[]>(MOCK_TABLES);
-  const [tournaments, setTournaments] = useState<Tournament[]>(MOCK_TOURNAMENTS);
+  const [tables, setTables] = useState<PokerTable[]>([]);
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  
+  // Fetch live tables from backend
+  useEffect(() => {
+    const fetchTables = async () => {
+      try {
+        const response = await fetch('http://localhost:4000/api/tables');
+        if (response.ok) {
+          const data = await response.json();
+          setTables(data);
+          console.log('[App] Live tables loaded:', data.length);
+        }
+      } catch (error) {
+        console.error('[App] Failed to fetch tables:', error);
+        // Fallback to mock data on error
+        setTables(MOCK_TABLES);
+      }
+    };
+    
+    fetchTables();
+    // Refresh tables every 5 seconds
+    const interval = setInterval(fetchTables, 5000);
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Fetch live tournaments from backend
+  useEffect(() => {
+    const fetchTournaments = async () => {
+      try {
+        const response = await fetch('http://localhost:4000/api/tournaments');
+        if (response.ok) {
+          const data = await response.json();
+          setTournaments(data);
+          console.log('[App] Live tournaments loaded:', data.length);
+        }
+      } catch (error) {
+        console.error('[App] Failed to fetch tournaments:', error);
+        // Fallback to mock data on error
+        setTournaments(MOCK_TOURNAMENTS);
+      }
+    };
+    
+    fetchTournaments();
+    // Refresh tournaments every 5 seconds
+    const interval = setInterval(fetchTournaments, 5000);
+    return () => clearInterval(interval);
+  }, []);
   
   // Modal State
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
@@ -174,13 +222,8 @@ const AppContent: React.FC = () => {
           setIsWalletModalOpen(true); // Open Custom Wallet Modal
           return;
       }
-      // Issue #6: Bot prevention - verify before joining
-      if (user && !user.isVerified) {
-          alert('Please complete bot verification before joining games.');
-          handleVerification();
-          return;
-      }
-      navigate(`/game/${gameId}`);
+      // Navigate with join intent parameter to trigger auto-join flow
+      navigate(`/game/${gameId}?join=true`);
   };
 
   const handleGameCreated = (newGame: PokerTable | Tournament, type: GameType) => {
@@ -284,6 +327,7 @@ const AppContent: React.FC = () => {
         <DepositWithdraw 
             isOpen={isDepositWithdrawOpen}
             onClose={() => setIsDepositWithdrawOpen(false)}
+            onBalanceUpdate={handleBalanceUpdate}
         />
 
         <CookieConsent onConsentChange={handleConsentChange} />

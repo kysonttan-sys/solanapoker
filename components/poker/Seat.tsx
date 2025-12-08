@@ -150,7 +150,9 @@ export const Seat: React.FC<SeatProps> = ({
           </div>
       )}
       {player.lastAction && !isWinner && (
-          <div className="absolute -top-4 md:-top-8 left-1/2 -translate-x-1/2 bg-gray-800/80 px-2 py-0.5 rounded text-[7px] md:text-[10px] text-gray-300 font-medium whitespace-nowrap animate-in fade-in zoom-in z-30">
+          <div className={`absolute left-1/2 -translate-x-1/2 bg-gray-800/80 px-2 py-0.5 rounded text-[7px] md:text-[10px] text-gray-300 font-medium whitespace-nowrap animate-in fade-in zoom-in z-30 ${
+              isHero ? 'top-12 md:top-16' : '-top-4 md:-top-8'
+          }`}>
               {player.lastAction}
           </div>
       )}

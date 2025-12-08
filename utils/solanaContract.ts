@@ -5,6 +5,7 @@ import { SOL_POKER_PROGRAM_ID } from '../constants';
 // --- ANCHOR CONSTANTS ---
 // These must match the Rust Contract "seeds" exactly
 const VAULT_SEED = "vault";
+const VAULT_STATE_SEED = "vault-state";
 const USER_STATE_SEED = "user-state";
 
 // Helper to derive the Vault Address (PDA)
@@ -15,6 +16,16 @@ export const getVaultAddress = async () => {
         programId
     );
     return vaultPda;
+};
+
+// Helper to derive Vault State Address (PDA) - Tracks total deposits/withdrawals
+export const getVaultStateAddress = async () => {
+    const programId = new PublicKey(SOL_POKER_PROGRAM_ID);
+    const [vaultStatePda] = await PublicKey.findProgramAddress(
+        [Buffer.from(VAULT_STATE_SEED)],
+        programId
+    );
+    return vaultStatePda;
 };
 
 // Helper to derive User State Address (PDA) - Tracks individual balances on-chain
@@ -45,6 +56,7 @@ export const createBuyInInstruction = async (
 ): Promise<TransactionInstruction> => {
     const programId = new PublicKey(SOL_POKER_PROGRAM_ID);
     const vaultPda = await getVaultAddress();
+    const vaultStatePda = await getVaultStateAddress();
     const userStatePda = await getUserStateAddress(playerPublicKey);
 
     // Function Name in Rust: "buy_in"
@@ -62,6 +74,7 @@ export const createBuyInInstruction = async (
     console.log("[Contract Security] Creating BuyIn Instruction", {
         user: playerPublicKey.toBase58(),
         vault: vaultPda.toBase58(),
+        vaultState: vaultStatePda.toBase58(),
         userState: userStatePda.toBase58(),
         amountSol: amountSol,
         lamports: amountLamports.toString()
@@ -71,6 +84,7 @@ export const createBuyInInstruction = async (
         keys: [
             { pubkey: playerPublicKey, isSigner: true, isWritable: true }, // user
             { pubkey: vaultPda, isSigner: false, isWritable: true },       // vault
+            { pubkey: vaultStatePda, isSigner: false, isWritable: true },  // vault_state (NEW)
             { pubkey: userStatePda, isSigner: false, isWritable: true },   // user_state
             { pubkey: SystemProgram.programId, isSigner: false, isWritable: false } // system_program
         ],
@@ -86,6 +100,7 @@ export const createLeaveTableInstruction = async (
 ): Promise<TransactionInstruction> => {
     const programId = new PublicKey(SOL_POKER_PROGRAM_ID);
     const vaultPda = await getVaultAddress();
+    const vaultStatePda = await getVaultStateAddress();
     const userStatePda = await getUserStateAddress(playerPublicKey);
 
     // Function Name in Rust: "leave_table"
@@ -101,6 +116,9 @@ export const createLeaveTableInstruction = async (
 
     console.log("[Contract Security] Creating Withdraw Instruction", {
         user: playerPublicKey.toBase58(),
+        vault: vaultPda.toBase58(),
+        vaultState: vaultStatePda.toBase58(),
+        userState: userStatePda.toBase58(),
         amountSol: amountSol,
         lamports: amountLamports.toString()
     });
@@ -109,6 +127,7 @@ export const createLeaveTableInstruction = async (
         keys: [
             { pubkey: playerPublicKey, isSigner: true, isWritable: true }, // user
             { pubkey: vaultPda, isSigner: false, isWritable: true },       // vault
+            { pubkey: vaultStatePda, isSigner: false, isWritable: true },  // vault_state (NEW)
             { pubkey: userStatePda, isSigner: false, isWritable: true },   // user_state
             { pubkey: SystemProgram.programId, isSigner: false, isWritable: false } // system_program
         ],
@@ -208,6 +227,74 @@ export const withdrawFromVault = async (
         return signature;
     } catch (e: any) {
         console.error("Withdraw Error Details:", e);
+        throw e;
+    }
+};
+
+/// Initialize the vault (admin only, one-time setup)
+export const initializeVault = async (
+    connection: Connection,
+    sendTransaction: any,
+    adminPublicKey: PublicKey
+) => {
+    if (!adminPublicKey) throw new Error("Wallet not connected");
+
+    try {
+        const programId = new PublicKey(SOL_POKER_PROGRAM_ID);
+        const vaultPda = await getVaultAddress();
+        const vaultStatePda = await getVaultStateAddress();
+
+        const discriminator = await getAnchorDiscriminator("initialize_vault");
+        const dataBuffer = Buffer.alloc(8);
+        discriminator.copy(dataBuffer, 0);
+
+        console.log("[Contract Security] Creating Initialize Vault Instruction", {
+            admin: adminPublicKey.toBase58(),
+            vault: vaultPda.toBase58(),
+            vaultState: vaultStatePda.toBase58()
+        });
+
+        const instruction = new TransactionInstruction({
+            keys: [
+                { pubkey: vaultStatePda, isSigner: false, isWritable: true },
+                { pubkey: vaultPda, isSigner: false, isWritable: true },
+                { pubkey: adminPublicKey, isSigner: true, isWritable: true },
+                { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+            ],
+            programId: programId,
+            data: dataBuffer
+        });
+
+        const transaction = new Transaction().add(instruction);
+        
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = adminPublicKey;
+
+        const signature = await sendTransaction(transaction, connection, {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed',
+        });
+        
+        console.log(`[Chain] Initialize Vault TX Sent: ${signature}`);
+        
+        const confirmationStrategy = {
+            signature,
+            blockhash,
+            lastValidBlockHeight
+        };
+        
+        const confirmation = await connection.confirmTransaction(confirmationStrategy, 'confirmed');
+
+        if (confirmation.value.err) {
+            console.error("Initialize Confirmation Error:", confirmation.value.err);
+            throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+        }
+        
+        console.log("✅ Vault initialized successfully!");
+        return signature;
+    } catch (e: any) {
+        console.error("Initialize Vault Error Details:", e);
         throw e;
     }
 };

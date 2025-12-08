@@ -31,6 +31,12 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
   const { tableId } = useParams<{ tableId: string }>();
   const navigate = useNavigate();
   const { socket, isConnected, status } = useSocket();
+  
+  // Check if user wants to auto-join (from "Join Table" button)
+  const [autoJoinIntent, setAutoJoinIntent] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('join') === 'true';
+  });
 
   // --- GAME DATA ---
   const tableData = tables.find(t => t.id === tableId);
@@ -153,7 +159,40 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
 
       setSelectedSeatIndex(seatIndex);
       setJoinPhase('verifying'); // Move to Phase 2
+      setIsCaptchaOpen(true); // Open captcha modal
   }, [user, gameState]);
+
+  // --- AUTO-JOIN FLOW: Trigger captcha immediately if user wants to join ---
+  useEffect(() => {
+    console.log('[GameRoom] Auto-join check:', { 
+      hasGameState: !!gameState, 
+      hasUser: !!user, 
+      autoJoinIntent, 
+      joinPhase 
+    });
+    
+    if (!gameState || !user || !autoJoinIntent || joinPhase !== 'idle') return;
+    
+    // Check if user is already seated
+    const isSeated = gameState.players.some(p => p.id === user.id);
+    if (isSeated) {
+      console.log('[GameRoom] User already seated, skipping auto-join');
+      setAutoJoinIntent(false);
+      return;
+    }
+    
+    console.log('[GameRoom] ✅ Auto-triggering join flow (from Join Table button)');
+    // Clear the URL parameter
+    window.history.replaceState({}, '', `/game/${tableId}`);
+    setAutoJoinIntent(false);
+    
+    // Trigger join flow after short delay
+    const timer = setTimeout(() => {
+      console.log('[GameRoom] Calling handleJoinRequest...');
+      handleJoinRequest();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [gameState, user, autoJoinIntent, joinPhase, tableId, handleJoinRequest]);
 
   /**
    * PHASE 2: VERIFICATION COMPLETE
@@ -368,11 +407,11 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
 
         {/* 1. Captcha */}
         <CaptchaModal 
-            isOpen={joinPhase === 'verifying'} 
+            isOpen={isCaptchaOpen && joinPhase === 'verifying'} 
             onVerify={handleCaptchaVerified} 
             onClose={cancelJoin}
             canClose={true}
-            isVerified={user?.isVerified}
+            isVerified={false}
         />
 
         {/* 2. Buy In */}

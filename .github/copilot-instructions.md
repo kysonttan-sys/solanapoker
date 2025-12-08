@@ -6,6 +6,7 @@
 - **Frontend**: React 19 + Vite (TypeScript) at `port 3000`
 - **Backend**: Express + Socket.io (Node.js) at `port 4000`
 - **Database**: SQLite via Prisma ORM (stored in `server/prisma/dev.db`)
+- **Wallet Integration**: Solana wallet adapters (Phantom, Solflare, WalletConnect) on **Devnet only**
 
 ### Critical Data Flow
 1. **Wallet Connection**: Users authenticate via `WalletContextProvider.tsx` (Phantom/Solflare/WalletConnect on Devnet)
@@ -41,23 +42,26 @@ npm run db:seed              # Populate test data
 
 ### Socket.io Communication
 Located in `server/src/gameManager.ts`. Events use **table-scoped rooms** with broadcast pattern:
-- **Client → Server**: `socket.emit('joinTable', { tableId, user, config })`, `socket.emit('sitDown', ...)`
+- **Client → Server**: `socket.emit('joinTable', { tableId, user, config })`, `socket.emit('sitDown', ...)`, `socket.emit('playerAction', ...)`
 - **Server → All players**: `this.io.to(tableId).emit('gameStateUpdate', gameState)`
 - **Individual responses**: `socket.emit('error', { message })` or `socket.emit('balanceUpdate', balance)`
+- **Spectator mode**: Unauthenticated players can observe with `user.id === 'spectator'`
 
-**Critical**: Always broadcast state after mutations. Use `this.broadcastState(tableId)` to sync all connected clients.
+**Critical**: Always broadcast state after mutations. GameRoom listens to `socket.on('gameStateUpdate')` to maintain client sync. After DB transactions (wins/losses), emit `balanceUpdate` immediately.
 
 ### Game State Management (`utils/pokerGameLogic.ts` + `server/src/utils/pokerGameLogic.ts`)
-- `PokerEngine` class provides pure functions: `initializeGame()`, `playerAction()`, `evaluateWinner()`
-- Shared `GameState` interface defines phase (`pre-flop|flop|turn|river|showdown`), pot, players array
-- **Duplicated logic**: Client-side logic in `utils/` for UI optimism; server-side in `server/src/utils/` as source of truth
-- Hand evaluation via `evaluateHand()` from `handEvaluator.ts` (using standard poker rankings)
+- `PokerEngine` class provides **pure functions**: `initializeGame()`, `playerAction()`, `evaluateWinner()`, `updatePlayerSocket()`
+- Shared `GameState` interface defines phase (`pre-flop|flop|turn|river|showdown`), pot, players array, dealer position, nonce
+- **Duplicated logic**: Client-side logic in `utils/` for UI optimism/rendering; server-side in `server/src/utils/` as source of truth (single canonical version)
+- Hand evaluation via `evaluateHand()` from `handEvaluator.ts` (using standard 5-card poker hand rankings)
+- **Immutable pattern**: All mutations return new `GameState` object; never mutate in-place
 
 ### User/Balance Flow
-1. **First join**: `db.user.findUnique()` or auto-create with 10,000 welcome bonus (in `gameManager.ts`)
-2. **Sit down**: Deduct buy-in via `db.transaction()` → check balance sufficiency → store in game state
-3. **Win hand**: Update `db.user.balance` and create `Transaction` record
-4. **Emit**: Send `balanceUpdate` event to player immediately
+1. **First join**: `db.user.findUnique()` or auto-create with 10,000 welcome bonus in `gameManager.handleJoin()`
+2. **Sit down**: Deduct buy-in via `db.transaction()` → validate sufficient balance → deduct → store stack in `PlayerState.balance` (game state)
+3. **Win hand**: Update `db.user.balance` (+ or -), create `Transaction` record for audit trail
+4. **Emit**: Send `balanceUpdate` event to player immediately after DB commit
+5. **Reconnection**: `updatePlayerSocket()` preserves player state; spectators see current game state
 
 ### Fairness System
 - **Server seed**: Generated server-side (hidden until hand ends)
@@ -69,40 +73,43 @@ Located in `server/src/gameManager.ts`. Events use **table-scoped rooms** with b
 ## File Organization
 
 ### Frontend (`/`)
-- **`pages/`**: Page-level components (GameRoom, Lobby, Leaderboard, etc.)
+- **`pages/`**: Page-level components (GameRoom, Lobby, Leaderboard, Profile, Admin, etc.)
 - **`components/poker/`**: Core UI: Table, Seat, Card, GameControls
 - **`components/ui/`**: Reusable UI: Button, Modal, CaptchaModal
+- **`components/`**: Global modals (BuyInModal, CreateGameModal, ConnectWalletModal, FairnessModal)
 - **`utils/`**: Game logic (pokerGameLogic, handEvaluator, fairness), wallet integration (solanaContract)
-- **`hooks/useSocket.ts`**: Socket.io client hook
+- **`hooks/useSocket.ts`**: Socket.io client hook connecting to `http://localhost:4000`
 
 ### Backend (`/server/src/`)
-- **`gameManager.ts`**: Socket event handlers + table lifecycle (handles joins, sits, actions, broadcasts)
-- **`utils/pokerGameLogic.ts`**: PokerEngine class (game phase transitions, hand evaluation)
-- **`utils/fairness.ts`**: Server seed generation + hashing
-- **`db.ts`**: Prisma client initialization
-- **`server.ts`**: Express app + Socket.io setup + REST endpoints (`/api/stats`, `/api/leaderboard`)
+- **`gameManager.ts`**: Socket event handlers + table lifecycle (joins, sits, actions, broadcasts, reconnection logic)
+- **`utils/pokerGameLogic.ts`**: PokerEngine class (game phase transitions, hand evaluation, all game mutations)
+- **`utils/fairness.ts`**: Server seed generation + HMAC-SHA256 hashing for deck reproducibility
+- **`db.ts`**: Prisma client initialization + type-safe queries
+- **`server.ts`**: Express app + Socket.io setup + REST endpoints (`/api/stats`, `/api/leaderboard`, `/api/tables`)
+- **`seed.ts`**: Database seeding for test data
 
 ## Type System
 
 ### Shared Types (`types.ts`)
-- **`User`**: Wallet-based identity with balance, preferences, referral/host ranks, ecosystem stats
-- **`PokerTable`**: Configured table instance (blind sizes, seat count, buy-in range)
-- **`GameState`** (frontend) vs backend version: Same interface, keep synchronized
-- **`PlayerState`**: Position-based seat info (cards hidden for non-actors), bet amount, status
+- **`User`**: Wallet-based identity (id = walletAddress) with balance, preferences, referral/host ranks, ecosystem stats (staking, referrals)
+- **`PokerTable`**: Configured table instance (blind sizes, seat count, buy-in range, gameMode: 'cash|tournament|fun')
+- **`GameState`** (frontend) vs backend: Same core interface (defined in both `utils/pokerGameLogic.ts`), must stay synchronized
+- **`PlayerState`**: Position-based seat info (cards hidden for non-acting players), currentBet, totalBet, status, handResult (after showdown)
 
 ### Backend-Specific (`server/src/utils/pokerGameLogic.ts`)
-- `FairnessState`: Server seed, hash, client seed, nonce tracking
-- Game mutations always return new `GameState` (immutable pattern)
+- **`FairnessState`**: Server seed (hidden until hand ends), currentServerHash, clientSeed, nonce (increments per hand), previousSeed tracking
+- **Pure functions pattern**: All mutations return new `GameState`; never modify in-place (functional style)
 
 ## Common Pitfalls & Solutions
 
 | Issue | Root Cause | Fix |
 |-------|-----------|-----|
-| Stale game state | Client not listening to broadcasts | Ensure `socket.on('gameStateUpdate', setGameState)` in GameRoom |
-| Balance discrepancies | Client-side balance not synced after server transaction | Use `socket.on('balanceUpdate')` + sync DB immediately |
-| Deck reproducibility fails | Nonce not incrementing or seed not persisted | Check `FairnessState` in game state before shuffle |
-| Phantom wallet not detecting | App not using Devnet | Verify `WalletAdapterNetwork.Devnet` in WalletContextProvider |
-| Port conflicts | Multiple npm processes running | Use `npx lsof -i :4000` (macOS) or `netstat -ano` (Windows) |
+| Stale game state on client | Client not listening to broadcasts or handler unmounts | Ensure `socket.on('gameStateUpdate', setGameState)` in GameRoom with proper cleanup on unmount |
+| Balance discrepancies | Client balance not synced after server transaction | Always emit `balanceUpdate` after `db.user.balance` update + commit transaction atomically |
+| Deck reproducibility fails | Nonce not incrementing or seed not persisted between hands | Verify `FairnessState.nonce` increments, seeds stored in GameState before each shuffle |
+| Phantom wallet not detecting | App not using Devnet RPC | Verify `WalletAdapterNetwork.Devnet` + `clusterApiUrl(network)` in WalletContextProvider |
+| Port conflicts | Multiple npm/vite/Express processes running on 3000 or 4000 | Windows: `netstat -ano \| findstr :4000` or `netstat -ano \| findstr :3000`; kill process and restart |
+| Player stuck in all-in | Game logic not handling all-in → side pot → showdown flow | Verify `playerAction()` transitions phase correctly when all players all-in or folded |
 
 ## Testing Patterns
 
@@ -114,17 +121,27 @@ Located in `server/src/gameManager.ts`. Events use **table-scoped rooms** with b
 ## External Dependencies
 
 - **Solana**: `@solana/wallet-adapter-react`, `@solana/web3.js` for wallet integration (Devnet only)
-- **UI**: Lucide icons, Recharts for data visualization
-- **Real-time**: Socket.io (v4.7.4) with WebSocket transport forced
-- **Database**: Prisma client (v5.10.2) with SQLite backend
+- **Real-time**: Socket.io (v4.7.4 frontend, v4.8.1 backend) with WebSocket transport
+- **UI**: Lucide React icons, Recharts for leaderboard/stats visualization
+- **Database**: Prisma (v5.10.2) with SQLite backend
+- **Router**: React Router v7 for SPA navigation (HashRouter for compatibility)
 
 ## Deployment Notes
 
-- **Frontend**: Vite build outputs to `dist/`; served as static assets
-- **Backend**: Node.js with ts-node in dev; build with `npm run build` for production
-- **Database**: Commit `schema.prisma` to version control; `.db` file is local-only
-- **Wallet**: Reconfigure `ADMIN_WALLET_ADDRESS` in `constants.ts` for production
+- **Frontend**: Vite build outputs to `dist/`; served as static assets (use environment variables for production URLs)
+- **Backend**: Node.js with ts-node-dev in dev; compile with `npm run build` then `npm start` for production
+- **Database**: Commit `server/prisma/schema.prisma` to version control; `.db` file is .gitignored (local-only)
+- **Wallet**: Reconfigure `ADMIN_WALLET_ADDRESS` in `constants.ts` and network in `WalletContextProvider.tsx` for production
+- **Socket.io**: Ensure backend CORS allows frontend origin; in production set specific origin (not wildcard)
+
+## Development Debugging Tips
+
+- **Debug Socket.io**: Add `socket.onAny((event, ...args) => console.log('SOCKET EVENT:', event, args))` in GameRoom
+- **Game state inconsistency**: Check both `utils/pokerGameLogic.ts` (client) and `server/src/utils/pokerGameLogic.ts` match (they're duplicated)
+- **Fairness verification**: Logs in `generateProvablyFairDeck()` show deck generation steps; nonce always increments
+- **DB issues**: Check `server/prisma/schema.prisma` schema after edits, run `npm run db:push` to apply
+- **Wallet connection**: Clear browser localStorage/sessionStorage if wallet state is stuck
 
 ---
 
-**For clarity on any patterns or decisions, reference the corresponding file path above. When adding features, preserve the Socket.io broadcast pattern and Prisma transaction atomicity.**
+**When adding features, preserve: (1) Socket.io broadcast pattern for state sync, (2) Prisma transaction atomicity for balance updates, (3) Fairness nonce increments, (4) Immutable game state mutations.**

@@ -171,6 +171,14 @@ app.get('/api/tables', (req, res) => {
     res.json(tables);
 });
 
+// 4b. Active Tournaments
+app.get('/api/tournaments', (req, res) => {
+    // Get all tournaments from GameManager
+    const allTables = gameManager.getAllTables();
+    const tournaments = allTables.filter(table => table.gameMode === 'tournament');
+    res.json(tournaments);
+});
+
 // 5. Current fairness state — returns current hand fairness data
 app.get('/api/proof/:tableId/current', (req, res) => {
     try {
@@ -371,6 +379,17 @@ io.on('connection', (socket) => {
         } catch (e) {
             console.error('[SitDown Error]', e);
             socket.emit('error', { message: 'Failed to sit down' });
+        }
+    });
+
+    socket.on('leaveTable', async ({ tableId, userId }) => {
+        try {
+            console.log(`[LeaveTable] ${userId} leaving table ${tableId}`);
+            await gameManager.handleDisconnect(socket);
+            socket.emit('leftTable', { success: true });
+        } catch (e) {
+            console.error('[LeaveTable Error]', e);
+            socket.emit('error', { message: 'Failed to leave table' });
         }
     });
 

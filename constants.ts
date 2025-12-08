@@ -4,7 +4,7 @@ import { PokerTable, Speed, Tournament, GameStats, User, GameType } from './type
 export const APP_NAME = "SOLPOKER X";
 
 // The Program ID you deployed to Devnet/Testnet
-export const SOL_POKER_PROGRAM_ID = 'EFeDTG6X5sMYHdck49zLhFxD2iKqJtiZSDL5f2oHMea2';
+export const SOL_POKER_PROGRAM_ID = 'FMuPdx45D9yvsGTVPBJuZ4SVK7zTDbYuGCLnDz2CW8cR';
 
 // FOR DEMO: We treat the Mock User's wallet as the Admin Wallet so you can access the page immediately.
 // In production, change this to your actual cold wallet address.
