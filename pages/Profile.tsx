@@ -66,23 +66,23 @@ const STATS_BY_TIMEFRAME: any = {
     hands: 0,
     tournamentsWon: 0,
     tournamentsPlayed: 0,
-    trendWinnings: '0%',
-    trendWinRate: '-0.2',
-    trendHands: '+15000',
-    trendTourney: '9% ITM',
-    handsDistribution: { royal: 1, straightFlush: 3, quads: 28, fullHouse: 245 }
-  },
-  'ALL': {
-    winnings: 51500,
-    winRate: 4.9,
-    hands: 64200,
-    tournamentsWon: 14,
-    tournamentsPlayed: 210,
     trendWinnings: 'N/A',
     trendWinRate: 'N/A',
     trendHands: 'N/A',
-    trendTourney: '7% ITM',
-    handsDistribution: { royal: 2, straightFlush: 5, quads: 54, fullHouse: 580 }
+    trendTourney: 'N/A',
+    handsDistribution: { royal: 0, straightFlush: 0, quads: 0, fullHouse: 0 }
+  },
+  'ALL': {
+    winnings: 0,
+    winRate: 0,
+    hands: 0,
+    tournamentsWon: 0,
+    tournamentsPlayed: 0,
+    trendWinnings: 'N/A',
+    trendWinRate: 'N/A',
+    trendHands: 'N/A',
+    trendTourney: 'N/A',
+    handsDistribution: { royal: 0, straightFlush: 0, quads: 0, fullHouse: 0 }
   }
 };
 
@@ -137,6 +137,13 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
   const [timeRange, setTimeRange] = useState('1W');
   const [isQrOpen, setIsQrOpen] = useState(false);
   
+  // Image positioning state
+  const [coverPosition, setCoverPosition] = useState({ x: 50, y: 50 }); // percentage
+  const [avatarPosition, setAvatarPosition] = useState({ x: 50, y: 50 });
+  const [isAdjustingCover, setIsAdjustingCover] = useState(false);
+  const [isAdjustingAvatar, setIsAdjustingAvatar] = useState(false);
+  const [dragStart, setDragStart] = useState<{ x: number, y: number } | null>(null);
+
   // Chat State
   const [activeChatFriend, setActiveChatFriend] = useState<any | null>(null);
   const [directMessages, setDirectMessages] = useState<Record<string, { id: string, text: string, sender: 'me' | 'them', time: string }[]>>({});
@@ -155,6 +162,14 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
   // Stats state for display
   const [stats, setStats] = useState(MOCK_STATS);
 
+  // Real data from API
+  const [userStats, setUserStats] = useState<any>(null);
+  const [walletHistory, setWalletHistory] = useState<any[]>([]);
+  const [gameHistory, setGameHistory] = useState<any[]>([]);
+  const [pnlChartData, setPnlChartData] = useState<any[]>([]);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
@@ -171,6 +186,7 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
   useEffect(() => {
     if (isOwnProfile && currentUser) {
       setProfileForm(currentUser);
+      setCoverUrl(currentUser.coverUrl || null); // Load cover from user data
       setStats(MOCK_STATS); // In real app, fetch real stats
       
       // Check for stuck session
@@ -197,7 +213,6 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
           email: '', // Hidden for others
           bio: 'Crypto enthusiast and poker pro.',
           balance: 0, // Hidden
-          spxBalance: 0,
           preferences: {
             showWinRate: Math.random() > 0.5,
             showPnL: Math.random() > 0.5
@@ -217,6 +232,54 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
       }
     }
   }, [userId, isOwnProfile, currentUser, navigate]);
+
+  // Fetch user stats from API when timeRange changes
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      const targetUserId = isOwnProfile ? currentUser?.id : userId;
+      if (!targetUserId) return;
+      
+      setIsLoadingStats(true);
+      try {
+        const res = await fetch(`http://localhost:4000/api/user/${targetUserId}/stats?timeframe=${timeRange}`);
+        if (res.ok) {
+          const data = await res.json();
+          setUserStats(data.stats);
+          setPnlChartData(data.pnlData || []);
+        }
+      } catch (e) {
+        console.error('Failed to fetch user stats:', e);
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+    
+    fetchUserStats();
+  }, [timeRange, currentUser?.id, userId, isOwnProfile]);
+
+  // Fetch user history (wallet transactions & game sessions)
+  useEffect(() => {
+    const fetchUserHistory = async () => {
+      const targetUserId = isOwnProfile ? currentUser?.id : userId;
+      if (!targetUserId) return;
+      
+      setIsLoadingHistory(true);
+      try {
+        const res = await fetch(`http://localhost:4000/api/user/${targetUserId}/history?limit=20`);
+        if (res.ok) {
+          const data = await res.json();
+          setWalletHistory(data.walletTransactions || []);
+          setGameHistory(data.gameSessions || []);
+        }
+      } catch (e) {
+        console.error('Failed to fetch user history:', e);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+    
+    fetchUserHistory();
+  }, [currentUser?.id, userId, isOwnProfile]);
 
   // Sync Settings to LocalStorage
   useEffect(() => localStorage.setItem('solpoker_fourcolor', fourColorDeck ? 'true' : 'false'), [fourColorDeck]);
@@ -252,13 +315,66 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'cover') => {
     const file = e.target.files?.[0];
     if (file && profileForm) {
-      const url = URL.createObjectURL(file);
-      if (type === 'avatar') {
-        setProfileForm({ ...profileForm, avatarUrl: url });
-      } else {
-        setCoverUrl(url);
+      // Validate file size (max 2MB for base64 storage)
+      if (file.size > 2 * 1024 * 1024) {
+        alert('Image too large. Please select an image under 2MB.');
+        return;
       }
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file.');
+        return;
+      }
+
+      // Convert to base64 for database storage
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        if (type === 'avatar') {
+          setProfileForm({ ...profileForm, avatarUrl: base64String });
+          setAvatarPosition({ x: 50, y: 50 }); // Reset position on new upload
+        } else {
+          setCoverUrl(base64String);
+          setCoverPosition({ x: 50, y: 50 }); // Reset position on new upload
+        }
+      };
+      reader.onerror = () => {
+        alert('Failed to read image file.');
+      };
+      reader.readAsDataURL(file);
     }
+  };
+
+  // Image position drag handlers
+  const handleDragStart = (e: React.MouseEvent, type: 'cover' | 'avatar') => {
+    e.preventDefault();
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleDragMove = (e: React.MouseEvent, type: 'cover' | 'avatar') => {
+    if (!dragStart) return;
+    
+    const deltaX = (e.clientX - dragStart.x) * 0.2; // Slow down movement
+    const deltaY = (e.clientY - dragStart.y) * 0.2;
+    
+    if (type === 'cover' && isAdjustingCover) {
+      setCoverPosition(prev => ({
+        x: Math.max(0, Math.min(100, prev.x - deltaX * 0.5)),
+        y: Math.max(0, Math.min(100, prev.y - deltaY * 0.5))
+      }));
+    } else if (type === 'avatar' && isAdjustingAvatar) {
+      setAvatarPosition(prev => ({
+        x: Math.max(0, Math.min(100, prev.x - deltaX * 0.5)),
+        y: Math.max(0, Math.min(100, prev.y - deltaY * 0.5))
+      }));
+    }
+    
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleDragEnd = () => {
+    setDragStart(null);
   };
 
   const handleCopyAddress = () => {
@@ -272,7 +388,7 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
   const handleCopyReferral = () => {
      if (profileForm?.referralCode) {
         const url = `${window.location.origin}/#/ref/${profileForm.referralCode}`;
-        const message = `🚀 Join me on SOLPOKER X! The fair, decentralized poker platform on Solana.\n\n♣️ Play Cash Games & Tournaments\n💰 Earn Real Yield Staking $SPX\n\nJoin here: ${url}`;
+        const message = `🚀 Join me on SOLPOKER X! The fair, decentralized poker platform on Solana.\n\n♣️ Play Cash Games & Tournaments\n💰 Earn as Host or Referrer\n\nJoin here: ${url}`;
         
         navigator.clipboard.writeText(message);
         alert(`Referral Content Copied!\n\n"${message}"`);
@@ -383,12 +499,43 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
       alert("Friend removed.");
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (onUpdateUser && profileForm) {
-        onUpdateUser(profileForm);
-        setIsEditing(false);
-        alert("Profile Updated Successfully!");
+    if (!profileForm) return;
+    
+    setIsSavingProfile(true);
+    try {
+        // Save to database
+        const res = await fetch(`http://localhost:4000/api/user/${profileForm.id}/profile`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: profileForm.username,
+                email: profileForm.email,
+                bio: profileForm.bio,
+                avatarUrl: profileForm.avatarUrl,
+                coverUrl: coverUrl,
+                preferences: profileForm.preferences
+            })
+        });
+        
+        if (res.ok) {
+            const updatedUser = await res.json();
+            setProfileForm(updatedUser);
+            if (onUpdateUser) onUpdateUser(updatedUser);
+            setIsEditing(false);
+            alert("Profile Updated Successfully!");
+        } else {
+            const error = await res.json();
+            alert(`Failed to save: ${error.error || 'Unknown error'}`);
+        }
+    } catch (err) {
+        console.error('Failed to save profile:', err);
+        alert('Failed to save profile. Please try again.');
+    } finally {
+        setIsSavingProfile(false);
     }
   };
 
@@ -402,7 +549,17 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
       default: return DATA_1W;
     }
   };
-  const currentStats = STATS_BY_TIMEFRAME[timeRange];
+  
+  // Use real API data if available, fallback to mock data
+  const currentStats = userStats || STATS_BY_TIMEFRAME[timeRange];
+  
+  // Use real PnL chart data if available
+  const getChartDataReal = () => {
+    if (pnlChartData && pnlChartData.length > 0) {
+      return pnlChartData;
+    }
+    return getChartData();
+  };
 
   // Calculate derived values before early return
   const vipStatus = profileForm ? getVipStatus(stats.totalHands) : null;
@@ -511,63 +668,129 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
       <Card className="relative overflow-hidden !p-0 border-none bg-sol-dark">
         {/* Banner */}
         <div 
-            className="h-[11.5rem] w-full relative group transition-all"
+            className={`h-[11.5rem] w-full relative group transition-all ${isAdjustingCover ? 'cursor-move' : ''}`}
             style={{
-                background: coverUrl ? `url(${coverUrl}) center/cover no-repeat` : 'linear-gradient(135deg, rgba(138,66,255,0.4) 0%, rgba(29,139,255,0.4) 100%)'
+                background: coverUrl 
+                  ? `url(${coverUrl}) ${coverPosition.x}% ${coverPosition.y}%/cover no-repeat` 
+                  : 'linear-gradient(135deg, rgba(138,66,255,0.4) 0%, rgba(29,139,255,0.4) 100%)'
             }}
+            onMouseDown={(e) => isAdjustingCover && handleDragStart(e, 'cover')}
+            onMouseMove={(e) => isAdjustingCover && handleDragMove(e, 'cover')}
+            onMouseUp={handleDragEnd}
+            onMouseLeave={handleDragEnd}
         >
-             <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
+             <div className={`absolute inset-0 transition-colors ${isAdjustingCover ? 'bg-black/50' : 'bg-black/20 group-hover:bg-black/40'}`} />
+             
+             {isAdjustingCover && (
+               <div className="absolute inset-0 flex items-center justify-center">
+                 <p className="text-white text-sm font-bold bg-black/50 px-4 py-2 rounded-lg">
+                   Drag to reposition
+                 </p>
+               </div>
+             )}
              
              {isOwnProfile && (
-               <>
+               <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                {coverUrl && !isAdjustingCover && (
+                  <button 
+                      onClick={() => setIsAdjustingCover(true)}
+                      className="bg-black/50 backdrop-blur-md border border-white/10 text-white hover:bg-sol-blue hover:text-white hover:border-sol-blue px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 text-xs font-bold uppercase tracking-wide"
+                  >
+                      <Target size={14} />
+                      Adjust
+                  </button>
+                )}
+                {isAdjustingCover && (
+                  <button 
+                      onClick={() => setIsAdjustingCover(false)}
+                      className="bg-sol-green text-black px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 text-xs font-bold uppercase tracking-wide"
+                  >
+                      <Check size={14} />
+                      Done
+                  </button>
+                )}
                 <button 
                     onClick={() => coverInputRef.current?.click()}
-                    className="absolute top-4 right-4 bg-black/50 backdrop-blur-md border border-white/10 text-white hover:bg-sol-green hover:text-black hover:border-sol-green px-3 py-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 flex items-center gap-2 text-xs font-bold uppercase tracking-wide"
+                    className="bg-black/50 backdrop-blur-md border border-white/10 text-white hover:bg-sol-green hover:text-black hover:border-sol-green px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 text-xs font-bold uppercase tracking-wide"
                 >
                     <ImageIcon size={14} />
-                    Edit Cover
+                    {coverUrl ? 'Change' : 'Edit Cover'}
                 </button>
-                <input 
-                    ref={coverInputRef}
-                    type="file" 
-                    accept="image/*" 
-                    className="hidden" 
-                    onChange={(e) => handleFileChange(e, 'cover')} 
-                />
-               </>
+               </div>
              )}
+             
+             <input 
+                ref={coverInputRef}
+                type="file" 
+                accept="image/*" 
+                className="hidden" 
+                onChange={(e) => handleFileChange(e, 'cover')} 
+             />
         </div>
         
         <div className="relative px-6 md:px-8 pb-8">
           <div className="flex flex-col md:flex-row gap-6 mb-8">
              {/* Avatar */}
              <div className="relative group -mt-16 mx-auto md:mx-0 shrink-0">
-               <div className="w-32 h-32 rounded-full border-[4px] border-[#13131F] bg-[#13131F] shadow-2xl relative overflow-hidden">
+               <div 
+                 className={`w-32 h-32 rounded-full border-[4px] border-[#13131F] bg-[#13131F] shadow-2xl relative overflow-hidden ${isAdjustingAvatar ? 'cursor-move ring-2 ring-sol-blue' : ''}`}
+                 onMouseDown={(e) => isAdjustingAvatar && handleDragStart(e, 'avatar')}
+                 onMouseMove={(e) => isAdjustingAvatar && handleDragMove(e, 'avatar')}
+                 onMouseUp={handleDragEnd}
+                 onMouseLeave={handleDragEnd}
+               >
                    <img 
                     src={profileForm.avatarUrl} 
                     alt={profileForm.username} 
                     className="w-full h-full rounded-full object-cover"
+                    style={{
+                      objectPosition: `${avatarPosition.x}% ${avatarPosition.y}%`
+                    }}
+                    draggable={false}
                    />
+                   {isAdjustingAvatar && (
+                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center rounded-full">
+                       <Target size={24} className="text-white animate-pulse" />
+                     </div>
+                   )}
                </div>
                
                {isOwnProfile && (
-                 <>
+                 <div className="absolute -bottom-1 right-0 flex gap-1">
+                  {profileForm.avatarUrl && !profileForm.avatarUrl.includes('ui-avatars.com') && !isAdjustingAvatar && (
+                    <button 
+                        onClick={() => setIsAdjustingAvatar(true)}
+                        className="bg-sol-dark border border-white/10 p-1.5 rounded-full text-white hover:bg-sol-blue hover:text-white hover:scale-110 transition-all shadow-lg z-10"
+                        title="Adjust Position"
+                    >
+                      <Target size={12} />
+                    </button>
+                  )}
+                  {isAdjustingAvatar && (
+                    <button 
+                        onClick={() => setIsAdjustingAvatar(false)}
+                        className="bg-sol-green border border-sol-green p-1.5 rounded-full text-black hover:scale-110 transition-all shadow-lg z-10"
+                        title="Done"
+                    >
+                      <Check size={12} />
+                    </button>
+                  )}
                   <button 
                       onClick={() => avatarInputRef.current?.click()}
-                      className="absolute bottom-2 right-2 bg-sol-dark border border-white/10 p-2 rounded-full text-white hover:bg-sol-green hover:text-black hover:scale-110 transition-all shadow-lg z-10"
+                      className="bg-sol-dark border border-white/10 p-1.5 rounded-full text-white hover:bg-sol-green hover:text-black hover:scale-110 transition-all shadow-lg z-10"
                       title="Upload Photo"
                   >
-                    <Camera size={16} />
+                    <Camera size={14} />
                   </button>
-                  <input 
-                        ref={avatarInputRef}
-                        type="file" 
-                        accept="image/*" 
-                        className="hidden" 
-                        onChange={(e) => handleFileChange(e, 'avatar')} 
-                    />
-                 </>
+                 </div>
                )}
+               <input 
+                    ref={avatarInputRef}
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={(e) => handleFileChange(e, 'avatar')} 
+               />
              </div>
              
              <div className="flex-1 text-center md:text-left pt-2 md:pt-0 mt-2 md:mt-0">
@@ -714,9 +937,12 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
                  {/* Charts Section */}
                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <Card className="lg:col-span-2 h-[400px] border-white/5 bg-black/20">
-                    <h3 className="text-lg font-bold text-white mb-6">Profit & Loss History ({timeRange})</h3>
+                    <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+                        Profit & Loss History ({timeRange})
+                        {isLoadingStats && <Loader2 size={16} className="animate-spin text-sol-green" />}
+                    </h3>
                     <ResponsiveContainer width="100%" height="85%">
-                        <AreaChart data={getChartData()}>
+                        <AreaChart data={getChartDataReal()}>
                         <defs>
                             <linearGradient id="colorPnl" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#00FFAE" stopOpacity={0.3}/>
@@ -736,38 +962,55 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
                     </Card>
 
                     <Card className="border-white/5 bg-black/20">
-                        <h3 className="text-lg font-bold text-white mb-6">Hand Analysis (AI)</h3>
+                        <h3 className="text-lg font-bold text-white mb-6">Hand Analysis</h3>
                         <div className="space-y-4">
                             <div className="p-4 bg-white/5 rounded-lg border border-white/5">
                                 <div className="flex justify-between items-center mb-2">
                                     <span className="text-sm text-gray-400">Best Hand ({timeRange})</span>
                                     <span className="text-sol-purple font-bold">
-                                        {currentStats.handsDistribution.royal > 0 ? 'Royal Flush' : 
-                                        currentStats.handsDistribution.straightFlush > 0 ? 'Straight Flush' : 
-                                        currentStats.handsDistribution.quads > 0 ? 'Four of a Kind' : 'Full House'}
+                                        {currentStats.hands > 0 
+                                          ? (currentStats.bestHand || (
+                                              currentStats.handsDistribution?.royal > 0 ? 'Royal Flush' : 
+                                              currentStats.handsDistribution?.straightFlush > 0 ? 'Straight Flush' : 
+                                              currentStats.handsDistribution?.quads > 0 ? 'Four of a Kind' : 
+                                              currentStats.handsDistribution?.fullHouse > 0 ? 'Full House' : 'High Card'
+                                            ))
+                                          : 'No hands played'
+                                        }
                                     </span>
                                 </div>
                                 <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                                    <div className="h-full bg-sol-purple w-[99%]"></div>
+                                    <div className="h-full bg-sol-purple transition-all" style={{ width: currentStats.hands > 0 ? '99%' : '0%' }}></div>
                                 </div>
                             </div>
                             <div className="p-4 bg-white/5 rounded-lg border border-white/5">
                                 <div className="flex justify-between items-center mb-2">
                                     <span className="text-sm text-gray-400">VPIP</span>
-                                    <span className="text-sol-blue font-bold">24%</span>
+                                    <span className="text-sol-blue font-bold">
+                                        {currentStats.hands > 0 ? `${currentStats.vpip || 0}%` : 'N/A'}
+                                    </span>
                                 </div>
                                 <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                                    <div className="h-full bg-sol-blue w-[24%]"></div>
+                                    <div className="h-full bg-sol-blue transition-all" style={{ width: `${currentStats.vpip || 0}%` }}></div>
                                 </div>
-                                <p className="text-xs text-gray-500 mt-2">Optimal range. You are playing tight-aggressive.</p>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    {currentStats.hands > 0 
+                                      ? (currentStats.vpip < 20 ? 'Tight player. Consider loosening up.' :
+                                         currentStats.vpip > 30 ? 'Loose player. Consider tightening up.' :
+                                         'Optimal range. You are playing tight-aggressive.')
+                                      : 'Play some hands to see your stats.'
+                                    }
+                                </p>
                             </div>
                             <div className="p-4 bg-white/5 rounded-lg border border-white/5">
                                 <div className="flex justify-between items-center mb-2">
                                     <span className="text-sm text-gray-400">PFR</span>
-                                    <span className="text-sol-green font-bold">18%</span>
+                                    <span className="text-sol-green font-bold">
+                                        {currentStats.hands > 0 ? `${currentStats.pfr || 0}%` : 'N/A'}
+                                    </span>
                                 </div>
                                 <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                                    <div className="h-full bg-sol-green w-[18%]"></div>
+                                    <div className="h-full bg-sol-green transition-all" style={{ width: `${currentStats.pfr || 0}%` }}></div>
                                 </div>
                             </div>
                         </div>
@@ -856,10 +1099,11 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
                       <Card className="bg-white/5 border-white/10 h-full">
                           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                               <Wallet size={18} className="text-sol-green"/> Wallet Transactions
+                              {isLoadingHistory && <Loader2 size={14} className="animate-spin" />}
                           </h3>
                           <div className="space-y-3">
-                              {MOCK_HISTORY.filter(t => ['deposit', 'withdrawal', 'referral'].includes(t.type)).map((tx, idx) => (
-                                  <div key={idx} className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-white/5">
+                              {walletHistory.length > 0 ? walletHistory.map((tx, idx) => (
+                                  <div key={tx.id || idx} className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-white/5">
                                       <div className="flex items-center gap-3">
                                           <div className={`p-2 rounded-lg ${tx.type === 'deposit' ? 'bg-sol-green/20 text-sol-green' : tx.type === 'withdrawal' ? 'bg-red-500/20 text-red-500' : 'bg-sol-purple/20 text-sol-purple'}`}>
                                               {tx.type === 'deposit' ? <ArrowDownCircle size={16}/> : tx.type === 'withdrawal' ? <ArrowUpCircle size={16}/> : <Gift size={16}/>}
@@ -885,23 +1129,30 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
                                           )}
                                       </div>
                                   </div>
-                              ))}
+                              )) : (
+                                  <div className="text-center py-8 text-gray-500">
+                                      <Wallet size={32} className="mx-auto mb-2 opacity-50" />
+                                      <p className="text-sm">No wallet transactions yet</p>
+                                      <p className="text-xs mt-1">Deposits and withdrawals will appear here</p>
+                                  </div>
+                              )}
                           </div>
                       </Card>
 
                       <Card className="bg-white/5 border-white/10 h-full">
                           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                               <Activity size={18} className="text-sol-blue"/> Game Sessions
+                              {isLoadingHistory && <Loader2 size={14} className="animate-spin" />}
                           </h3>
                           <div className="space-y-3">
-                              {MOCK_HISTORY.filter(t => t.type.includes('game')).map((tx, idx) => (
-                                  <div key={idx} className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-white/5">
+                              {gameHistory.length > 0 ? gameHistory.map((tx, idx) => (
+                                  <div key={tx.id || idx} className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-white/5">
                                       <div className="flex items-center gap-3">
                                           <div className={`p-2 rounded-lg ${tx.amount > 0 ? 'bg-yellow-500/20 text-yellow-500' : 'bg-gray-700/50 text-gray-400'}`}>
                                               <Trophy size={16}/>
                                           </div>
                                           <div>
-                                              <p className="text-sm font-bold text-white">{tx.desc}</p>
+                                              <p className="text-sm font-bold text-white">{tx.desc || 'Game Session'}</p>
                                               <p className="text-xs text-gray-500">{tx.date}</p>
                                           </div>
                                       </div>
@@ -911,7 +1162,13 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
                                           </p>
                                       </div>
                                   </div>
-                              ))}
+                              )) : (
+                                  <div className="text-center py-8 text-gray-500">
+                                      <Trophy size={32} className="mx-auto mb-2 opacity-50" />
+                                      <p className="text-sm">No game sessions yet</p>
+                                      <p className="text-xs mt-1">Play some hands to see your history</p>
+                                  </div>
+                              )}
                           </div>
                       </Card>
                   </div>
@@ -1062,7 +1319,7 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
               </div>
           )}
 
-          {activeTab === 'settings' && (
+          {activeTab === 'settings' && profileForm && (
               // SETTINGS TAB
               <div className="space-y-8 animate-in slide-in-from-right-4 max-w-3xl mx-auto">
                  
@@ -1209,8 +1466,12 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
                                 {isEditing ? 'Cancel' : 'Edit Info'}
                             </Button>
                             {isEditing && (
-                                <Button type="submit" className="gap-2 shadow-[0_0_20px_rgba(0,255,174,0.3)]">
-                                    <Save size={18} /> Save Changes
+                                <Button type="submit" disabled={isSavingProfile} className="gap-2 shadow-[0_0_20px_rgba(0,255,174,0.3)]">
+                                    {isSavingProfile ? (
+                                        <><Loader2 size={18} className="animate-spin" /> Saving...</>
+                                    ) : (
+                                        <><Save size={18} /> Save Changes</>
+                                    )}
                                 </Button>
                             )}
                         </div>

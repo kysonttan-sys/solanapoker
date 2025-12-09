@@ -4,6 +4,7 @@ import { PokerEngine, GameState } from './utils/pokerGameLogic';
 import { db } from './db';
 import { generateServerSeed, hashSeed, generateProvablyFairDeck } from './utils/fairness';
 import { getGameBlockchainHelper } from './gameBlockchain';
+import { distributionManager } from './distributionManager';
 
 export class GameManager {
     private io: Server;
@@ -14,6 +15,34 @@ export class GameManager {
     constructor(io: Server) {
         this.io = io;
         this.initializeDemoTables();
+    }
+
+    // Update active players count in database
+    private async updateActivePlayersCount() {
+        try {
+            // Count unique non-bot players across all tables
+            const uniquePlayers = new Set<string>();
+            for (const table of this.tables.values()) {
+                for (const player of table.players) {
+                    if (!player.id.startsWith('bot_')) {
+                        uniquePlayers.add(player.id);
+                    }
+                }
+            }
+            
+            await db.systemState.upsert({
+                where: { id: 'global' },
+                create: { 
+                    id: 'global',
+                    activePlayers: uniquePlayers.size
+                },
+                update: { 
+                    activePlayers: uniquePlayers.size
+                }
+            });
+        } catch (e) {
+            console.error('[GameManager] Failed to update active players count:', e);
+        }
     }
 
     private initializeDemoTables() {
@@ -152,6 +181,9 @@ export class GameManager {
         this.tables.set(tableId, updatedTable);
         this.broadcastState(tableId);
         
+        // Update active players count in database
+        this.updateActivePlayersCount();
+        
         // Auto-start game if we have 2+ active players and game hasn't started
         const activePlayers = updatedTable.players.filter((p: any) => p.status !== 'sitting-out' && p.balance > 0);
         if (activePlayers.length >= 2 && updatedTable.currentTurnPlayerId === null && updatedTable.communityCards.length === 0) {
@@ -182,122 +214,239 @@ export class GameManager {
         }
     }
 
-    public handleAction(socket: Socket, tableId: string, action: any, amount: number) {
+    // Shared action processing logic for both players and bots
+    private processAction(tableId: string, playerId: string, playerName: string, action: any, amount: number): boolean {
         const DEBUG = process.env.NODE_ENV === 'development';
+        const table = this.tables.get(tableId);
+        if (!table) return false;
+
+        if (DEBUG) console.log(`[Action] ${playerName} at table ${tableId}: ${action} ${amount || ''}`);
+        
+        let newState = PokerEngine.handleAction(table, playerId, action, amount);
+        
+        if (DEBUG) console.log(`[State] After action - Phase: ${newState.phase}, CurrentTurn: ${newState.currentTurnPlayerId}`);
+        
+        // Auto-advance if betting round is complete OR everyone is all-in/folded
+        const activePlayers = newState.players.filter(p => p.status === 'active' || p.status === 'all-in');
+        const canActPlayers = activePlayers.filter(p => p.status === 'active');
+        
+        if (newState.currentTurnPlayerId === null || canActPlayers.length <= 1) {
+            if (DEBUG) console.log('[GameFlow] Betting round complete or all players all-in/folded, advancing phase...');
+            newState = PokerEngine.advancePhase(newState);
+            if (DEBUG) console.log(`[GameFlow] Advanced to phase: ${newState.phase}, new turn: ${newState.currentTurnPlayerId}`);
+            console.log(`[GameFlow] Advanced to phase: ${newState.phase}, new turn: ${newState.currentTurnPlayerId}`);
+            
+            // If still no one can act, keep advancing until showdown
+            while (newState.phase !== 'showdown' && canActPlayers.length <= 1 && activePlayers.length > 1) {
+                newState = PokerEngine.advancePhase(newState);
+                if (DEBUG) console.log(`[GameFlow] Auto-advancing to: ${newState.phase}`);
+            }
+        }
+
+        // Handle Winners -> DB Update AND Hand History
+        if (newState.winners && newState.winners.length > 0) {
+            this.handleWinners(tableId, table, newState);
+        }
+
+        this.tables.set(tableId, newState);
+        this.broadcastState(tableId);
+        return true;
+    }
+
+    public handleAction(socket: Socket, tableId: string, action: any, amount: number) {
         const table = this.tables.get(tableId);
         if (!table) return;
 
         const player = table.players.find((p: any) => p.socketId === socket.id);
         if (player) {
-            if (DEBUG) console.log(`[Action] ${player.name} at table ${tableId}: ${action} ${amount || ''}`);
+            this.processAction(tableId, player.id, player.name, action, amount);
+        }
+    }
+
+    private async handleWinners(tableId: string, table: any, newState: any) {
+        // Calculate and distribute rake
+        let totalRake = 0;
+        let rakeDistribution: { host: number; referrer: number; jackpot: number; globalPool: number; developer: number } | null = null;
+        
+        if (table.gameMode === 'cash' && newState.pot > 0) {
+            // Get winner's VIP level for rake calculation
+            const mainWinner = newState.winners[0];
+            let vipLevel = 0;
             
-            let newState = PokerEngine.handleAction(table, player.id, action, amount);
-            
-            if (DEBUG) console.log(`[State] After action - Phase: ${newState.phase}, CurrentTurn: ${newState.currentTurnPlayerId}`);
-            if (newState.currentTurnPlayerId === null) {
-                if (DEBUG) console.log('[GameFlow] Betting round complete, advancing phase...');
-                newState = PokerEngine.advancePhase(newState);
-                if (DEBUG) console.log(`[GameFlow] Advanced to phase: ${newState.phase}, new turn: ${newState.currentTurnPlayerId}`);
-                console.log(`[GameFlow] Advanced to phase: ${newState.phase}, new turn: ${newState.currentTurnPlayerId}`);
+            try {
+                if (mainWinner && !mainWinner.playerId.startsWith('bot_')) {
+                    const winnerUser = await db.user.findUnique({ 
+                        where: { id: mainWinner.playerId },
+                        select: { totalHands: true }
+                    });
+                    
+                    if (winnerUser) {
+                        // Determine VIP level based on hands
+                        if (winnerUser.totalHands >= 100000) vipLevel = 4; // Legend
+                        else if (winnerUser.totalHands >= 20000) vipLevel = 3; // High Roller
+                        else if (winnerUser.totalHands >= 5000) vipLevel = 2; // Shark
+                        else if (winnerUser.totalHands >= 1000) vipLevel = 1; // Grinder
+                        else vipLevel = 0; // Fish
+                    }
+                }
+            } catch (e) {
+                console.error('[Rake] Error fetching VIP level:', e);
             }
             
-            // Handle Winners -> DB Update AND Hand History
-            if (newState.winners && newState.winners.length > 0) {
-                // Track hand completion for fairness verification
-                const handToSave = {
-                    tableId: table.tableId,
-                    handNumber: table.handNumber || 1,
-                    fairnessHash: table.fairness?.previousServerHash || '',
-                    fairnessReveal: table.fairness?.previousServerSeed || undefined,
-                    clientSeed: table.fairness?.previousClientSeed || undefined,
-                    nonce: table.fairness?.previousNonce || undefined,
-                    communityCards: JSON.stringify(newState.communityCards || []),
-                    winnerIds: JSON.stringify(newState.winners.map(w => w.playerId)),
-                    potAmount: newState.pot || 0,
-                    rakeAmount: Math.round((newState.pot || 0) * 0.05), // 5% rake
-                    user: { connect: { id: newState.winners[0].playerId } } // Required by Prisma schema
-                };
-
-                newState.winners.forEach(async (winner) => {
-                    if (!winner.playerId.startsWith('bot_')) {
-                        try {
-                            await db.$transaction([
-                                db.user.update({
-                                    where: { id: winner.playerId },
-                                    data: { 
-                                        balance: { increment: winner.amount },
-                                        totalWinnings: { increment: winner.amount },
-                                        totalHands: { increment: 1 }
-                                    }
-                                }),
-                                db.transaction.create({
-                                    data: {
-                                        userId: winner.playerId,
-                                        type: 'GAME_WIN',
-                                        amount: winner.amount,
-                                        status: 'COMPLETED',
-                                        handId: table.handNumber?.toString() || '1'
-                                    }
-                                }),
-                                // Save hand for fairness verification
-                                db.hand.create({
-                                    data: handToSave
-                                })
-                            ]);
-
-                            // Note: Rake distribution is automatic via protocol fee split
-                        } catch(e) { console.error('DB Update Error on Win', e); }
+            totalRake = PokerEngine.calculateRake(newState.pot, table, vipLevel);
+            
+            // Get host and referrer info (placeholder - implement table host tracking)
+            const hostTier = 0; // TODO: Track table host
+            const referrerRank = 0; // TODO: Track winner's referrer
+            
+            rakeDistribution = PokerEngine.distributeRake(totalRake, hostTier, referrerRank);
+            
+            // Save rake distribution to database
+            try {
+                // @ts-ignore - rakeDistribution model may not be in Prisma types yet
+                await db.rakeDistribution.create({
+                    data: {
+                        handId: table.handNumber?.toString() || '0',
+                        totalRake,
+                        hostShare: rakeDistribution.host,
+                        hostTier,
+                        referrerShare: rakeDistribution.referrer,
+                        referrerRank,
+                        jackpotShare: rakeDistribution.jackpot,
+                        globalPoolShare: rakeDistribution.globalPool,
+                        developerShare: rakeDistribution.developer
                     }
                 });
-            }
 
-            this.tables.set(tableId, newState);
-            this.broadcastState(tableId);
+                // Add to Global Partner Pool (auto-distributes to Rank 3 Partners)
+                await distributionManager.addToGlobalPool(rakeDistribution.globalPool);
 
-            if (newState.winners) {
-                setTimeout(async () => {
-                    const t = this.tables.get(tableId);
-                    if (t) {
-                        try {
-                            // Check if we have enough active players
-                            const activePlayers = t.players.filter((p: any) => 
-                                p.status === 'active' && p.balance > t.bigBlind
-                            );
-                            
-                            if (activePlayers.length < 2) {
-                                console.log(`[GameFlow] Not enough active players (${activePlayers.length}) for next hand at table ${tableId}`);
-                                return;
-                            }
-                            
-                            const serverSeed = generateServerSeed();
-                            const serverHash = hashSeed(serverSeed);
-                            const clientSeed = t.fairness?.clientSeed || `client_${Date.now()}`;
-                            const nonce = (t.handNumber || 0) + 1;
-
-                            const deck = generateProvablyFairDeck(serverSeed, clientSeed, nonce);
-
-                            const newFairness = {
-                                currentServerSeed: serverSeed,
-                                currentServerHash: serverHash,
-                                clientSeed,
-                                nonce,
-                                previousServerSeed: t.fairness?.currentServerSeed || undefined,
-                                previousServerHash: t.fairness?.currentServerHash || undefined,
-                                previousClientSeed: t.fairness?.clientSeed || undefined,
-                                previousNonce: t.fairness?.nonce || undefined
-                            } as any;
-
-                            const nextState = PokerEngine.dealHand(t, deck, newFairness);
-                            this.tables.set(tableId, nextState);
-                            this.broadcastState(tableId);
-                            console.log(`[GameFlow] Next hand dealt for table ${tableId}, Hand #${nextState.handNumber}`);
-                        } catch (e) {
-                            console.error('Error generating next hand deck', e);
-                        }
-                    }
-                }, 5000);
+                // Add to Monthly Jackpot (distributes on 1st of every month)
+                await distributionManager.addToJackpot(rakeDistribution.jackpot);
+                
+                console.log(`[Rake] Distributed $${totalRake.toFixed(2)} - Host: $${rakeDistribution.host.toFixed(2)}, Jackpot: $${rakeDistribution.jackpot.toFixed(2)}, Global Pool: $${rakeDistribution.globalPool.toFixed(2)}, Dev: $${rakeDistribution.developer.toFixed(2)}`);
+            } catch (e) {
+                console.error('[Rake] Error saving distribution:', e);
             }
         }
+
+        // Track hand completion for fairness verification
+        // Use CURRENT fairness state (this is the hand that just completed)
+        const handToSave = {
+            tableId: table.tableId,
+            handNumber: table.handNumber || 1,
+            fairnessHash: table.fairness?.currentServerHash || '',
+            fairnessReveal: table.fairness?.currentServerSeed || undefined, // Server seed revealed after hand ends
+            clientSeed: table.fairness?.clientSeed || undefined,
+            nonce: table.fairness?.nonce || undefined,
+            communityCards: JSON.stringify(newState.communityCards || []),
+            winnerIds: JSON.stringify(newState.winners.map((w: any) => w.playerId)),
+            potAmount: newState.pot || 0,
+            rakeAmount: Math.round((newState.pot || 0) * 0.05), // 5% rake
+            user: { connect: { id: newState.winners[0].playerId } } // Required by Prisma schema
+        };
+
+        // Update system-wide stats (totalHands)
+        try {
+            await db.systemState.upsert({
+                where: { id: 'global' },
+                create: { 
+                    id: 'global',
+                    totalHands: 1,
+                    totalVolume: newState.pot || 0
+                },
+                update: { 
+                    totalHands: { increment: 1 },
+                    totalVolume: { increment: newState.pot || 0 }
+                }
+            });
+        } catch(e) { console.error('SystemState Update Error', e); }
+
+        newState.winners.forEach(async (winner: any) => {
+            if (!winner.playerId.startsWith('bot_')) {
+                try {
+                    await db.$transaction([
+                        db.user.update({
+                            where: { id: winner.playerId },
+                            data: { 
+                                balance: { increment: winner.amount },
+                                totalWinnings: { increment: winner.amount },
+                                totalHands: { increment: 1 }
+                            }
+                        }),
+                        db.transaction.create({
+                            data: {
+                                userId: winner.playerId,
+                                type: 'GAME_WIN',
+                                amount: winner.amount,
+                                status: 'COMPLETED',
+                                handId: table.handNumber?.toString() || '1'
+                            }
+                        }),
+                        // Save hand for fairness verification
+                        db.hand.create({
+                            data: handToSave
+                        })
+                    ]);
+
+                    // Note: Rake distribution is automatic via protocol fee split
+                } catch(e) { console.error('DB Update Error on Win', e); }
+            }
+        });
+
+        // Schedule next hand
+        setTimeout(async () => {
+            const t = this.tables.get(tableId);
+            if (t) {
+                try {
+                    // Check if we have enough active players (need at least bigBlind to play)
+                    const activePlayers = t.players.filter((p: any) => 
+                        (p.status === 'active' || p.status === 'all-in') && p.balance >= t.bigBlind
+                    );
+                    
+                    if (activePlayers.length < 2) {
+                        console.log(`[GameFlow] Not enough active players (${activePlayers.length}) for next hand at table ${tableId}`);
+                        // Reset game state to waiting for players
+                        const resetState = {
+                            ...t,
+                            phase: 'pre-flop' as const,
+                            winners: undefined,
+                            currentTurnPlayerId: null,
+                            communityCards: [],
+                            pot: 0
+                        };
+                        this.tables.set(tableId, resetState);
+                        this.broadcastState(tableId);
+                        return;
+                    }
+                    
+                    const serverSeed = generateServerSeed();
+                    const serverHash = hashSeed(serverSeed);
+                    const clientSeed = t.fairness?.clientSeed || `client_${Date.now()}`;
+                    const nonce = (t.handNumber || 0) + 1;
+
+                    const deck = generateProvablyFairDeck(serverSeed, clientSeed, nonce);
+
+                    const newFairness = {
+                        currentServerSeed: serverSeed,
+                        currentServerHash: serverHash,
+                        clientSeed,
+                        nonce,
+                        previousServerSeed: t.fairness?.currentServerSeed || undefined,
+                        previousServerHash: t.fairness?.currentServerHash || undefined,
+                        previousClientSeed: t.fairness?.clientSeed || undefined,
+                        previousNonce: t.fairness?.nonce || undefined
+                    } as any;
+
+                    const nextState = PokerEngine.dealHand(t, deck, newFairness);
+                    this.tables.set(tableId, nextState);
+                    this.broadcastState(tableId);
+                    console.log(`[GameFlow] Next hand dealt for table ${tableId}, Hand #${nextState.handNumber}`);
+                } catch (e) {
+                    console.error('Error generating next hand deck', e);
+                }
+            }
+        }, 5000);
     }
 
     public async handleDisconnect(socket: Socket) {
@@ -336,6 +485,9 @@ export class GameManager {
                 };
                 this.tables.set(tableId, updatedTable);
                 this.broadcastState(tableId);
+                
+                // Update active players count in database
+                this.updateActivePlayersCount();
             }
         }
     }
@@ -357,6 +509,33 @@ export class GameManager {
 
     public getGameSpeed() {
         return this.gameSpeedMultiplier;
+    }
+
+    // Admin Close Table
+    public closeTable(tableId: string): { success: boolean, message: string } {
+        const table = this.tables.get(tableId);
+        if (!table) {
+            return { success: false, message: 'Table not found' };
+        }
+
+        // Return all player balances before closing
+        for (const player of table.players) {
+            if (!player.id.startsWith('bot_') && player.balance > 0) {
+                db.user.update({
+                    where: { id: player.id },
+                    data: { balance: { increment: player.balance } }
+                }).catch(e => console.error(`[CloseTable] Failed to return balance to ${player.id}:`, e));
+            }
+        }
+
+        // Notify all players in the room
+        this.io.to(tableId).emit('tableClosed', { tableId, reason: 'Table closed by admin' });
+
+        // Remove the table
+        this.tables.delete(tableId);
+        console.log(`[GameManager] Table ${tableId} closed by admin`);
+        
+        return { success: true, message: `Table ${tableId} closed successfully` };
     }
 
     // Issue #5: Admin Bot Control
@@ -467,9 +646,8 @@ export class GameManager {
 
             setTimeout(() => {
                 try {
-                    const updatedTable = PokerEngine.handleAction(table, botId, action as any, raiseAmount);
-                    this.tables.set(tableId, updatedTable);
-                    this.broadcastState(tableId);
+                    // Use the shared processAction method to ensure proper game flow
+                    this.processAction(tableId, botId, bot.name, action as any, raiseAmount);
 
                     // Continue thinking
                     setTimeout(botThink, 500 * this.gameSpeedMultiplier);

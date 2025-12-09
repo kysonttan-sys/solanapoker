@@ -10,37 +10,13 @@ export const SOL_POKER_PROGRAM_ID = 'FMuPdx45D9yvsGTVPBJuZ4SVK7zTDbYuGCLnDz2CW8c
 // In production, change this to your actual cold wallet address.
 export const ADMIN_WALLET_ADDRESS = 'GvYPMAk8CddRucjwLHDud1yy51QQtQDhgiB9AWdRtAoD'; 
 
-export const STAKING_POOL_INFO = {
-    tvl: 12500000, // Total SPX Staked
-    apy: 24.5, // Base APY %
-    totalStakers: 1420,
-    tokenPrice: 0.15, // Mock Price in USDT
-    rewardToken: '$SPX'
-};
-
-export const TOKENOMICS_INFO = {
-    totalSupply: 1000000000, // 1B
-    staking: {
-        percent: 60,
-        amount: 600000000,
-        vesting: '10y Vesting',
-        desc: 'Rewards for stakers vested over 10 years.'
-    },
-    liquidity: {
-        percent: 40,
-        amount: 400000000,
-        lock: 'Perm. Lock',
-        desc: 'Paired with SOL/USDT for trading stability.'
-    }
-};
-
 export const PRIZE_POOL_INFO = {
     currentAmount: 0, // Starts from 0, accumulates 5% of rake
     nextPayout: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
     distribution: {
-        topPlayer: 30,  // 30% to Top Players
-        topEarner: 30,  // 30% to Top Earner
-        luckyDraw: 40   // 40% to 10x Lucky Players (random & fair)
+        topPlayer: 30,  // 30% to Top 3 Players by hands (50%/30%/20% tiered)
+        topEarner: 30,  // 30% to Top 3 Earners by profit (50%/30%/20% tiered)
+        luckyDraw: 40   // 40% to 10 Lucky Random Winners (equal split)
     }
 };
 
@@ -56,24 +32,21 @@ export const PRIZE_POOL_INFO = {
 //    - Scout (Tier 0): 5% of rake
 //    - Partner (Tier 3): 20% of rake
 // 3. Protocol Allocations (from remaining rake after host + referrer):
-//    - Buyback & Burn: 10%
 //    - Community Jackpot: 5%
 //    - Global Partner Pool: 5%
-//    - Developer Treasury: Remainder (typically 20-30%)
+//    - Developer Treasury: Remainder (typically 30-40%)
 //
 // EXAMPLE CALCULATION:
 // Pot: $100, Rake: 3% = $3
 // - Host (Tier 2, 35%): $1.05
 // - Referrer (Tier 1, 10%): $0.30
 // - Remaining: $1.65
-//   * Buyback (10% of $3): $0.30
 //   * Jackpot (5% of $3): $0.15
 //   * Global Pool (5% of $3): $0.15
-//   * Developer (remainder): $1.05
+//   * Developer (remainder): $1.35
 // Total: $3.00 ✓
 
 export const PROTOCOL_FEE_SPLIT = {
-    buyback: 10,   // 10% of total rake to Buyback & Burn SPX
     jackpot: 5,    // 5% of total rake to Community Jackpot
     globalPool: 5, // 5% of total rake to Global Partner Pool (Rank 3 Referrers)
     referrerMax: 20, // Max Referrer commission (Partner Rank 3)
@@ -81,7 +54,7 @@ export const PROTOCOL_FEE_SPLIT = {
     hostMax: 40,     // Max Host share (Casino Mogul Tier 4)
     hostMin: 30,     // Min Host share (Dealer Tier 0)
     // Developer receives remainder after all allocations
-    // Formula: developer = rake - (host + referrer + buyback + jackpot + globalPool)
+    // Formula: developer = rake - (host + referrer + jackpot + globalPool)
 };
 
 export const VIP_LEVELS = [
@@ -186,7 +159,6 @@ export const MOCK_USER: User = {
   email: 'shark@solpokerx.io',
   bio: 'All in or nothing. Solana believer.',
   balance: 5430.50,
-  spxBalance: 25000, // 25,000 SPX Tokens available
   totalHands: 15420, // Sync with MOCK_STATS
   friends: ['u2', 'u3', 'u5'], // PhantomAce, SolDegen, HODLer_Pro
   preferences: {
@@ -211,13 +183,6 @@ export const MOCK_USER: User = {
     pendingRewards: 576.05,
     directAgents: 4,
     directBrokers: 3
-  },
-  stakingStats: {
-    stakedAmount: 50000, // 50,000 SPX Staked
-    rewardsEarned: 1240.55, // Claimable SPX
-    totalRewardsClaimed: 4500,
-    apy: 24.5,
-    lastStakedTime: Date.now() - (8 * 24 * 60 * 60 * 1000) // 8 days ago (Safe to unstake)
   }
 };
 

@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
-import { Lock, Save, Activity, DollarSign, Users, PauseCircle, PlayCircle, Settings, ShieldAlert, Database, Search, Ban, CheckCircle, XCircle, Terminal, Eye, Trash2, Megaphone, AlertTriangle, RefreshCw, Edit, Crown, Server, ListChecks, Zap, Bot } from 'lucide-react';
-import { STAKING_POOL_INFO, ADMIN_WALLET_ADDRESS, LEADERBOARD_DATA, MOCK_TABLES, PROTOCOL_FEE_SPLIT, MOCK_USER, REFERRAL_TIERS, HOST_TIERS } from '../constants';
+import { Lock, Save, Activity, DollarSign, Users, PauseCircle, PlayCircle, Settings, ShieldAlert, Database, Search, Ban, CheckCircle, XCircle, Terminal, Eye, Trash2, Megaphone, AlertTriangle, RefreshCw, Edit, Crown, Server, ListChecks, Zap, Bot, TrendingUp, Wallet, Gift, ArrowUpCircle, ArrowDownCircle, Clock, PieChart, Trophy } from 'lucide-react';
+import { ADMIN_WALLET_ADDRESS, LEADERBOARD_DATA, MOCK_TABLES, PROTOCOL_FEE_SPLIT, MOCK_USER, REFERRAL_TIERS, HOST_TIERS } from '../constants';
 import { User } from '../types';
 import { Navigate } from 'react-router-dom';
 import { useConnection } from '@solana/wallet-adapter-react';
@@ -29,7 +29,7 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
     // Initialize all hooks FIRST (before any conditional returns)
     const { connection } = useConnection();
     const { socket } = useSocket(); // Issue #5, #6: Socket for admin controls
-    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'games' | 'logs'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'games' | 'transactions' | 'logs'>('overview');
     const [isSaving, setIsSaving] = useState(false);
     const [protocolPaused, setProtocolPaused] = useState(false);
     
@@ -44,6 +44,23 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
     // Issue #14: Fetch real user data from backend
     const [usersList, setUsersList] = useState<any[]>([]);
     const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+    
+    // Real-time stats from backend
+    const [activeTables, setActiveTables] = useState(0);
+    const [activePlayersOnline, setActivePlayersOnline] = useState(0);
+    const [systemLogs, setSystemLogs] = useState<{id: number, type: string, time: string, msg: string}[]>([]);
+    const [realTables, setRealTables] = useState<any[]>([]);
+
+    // Revenue Dashboard State
+    const [revenueData, setRevenueData] = useState<any>(null);
+    const [jackpotData, setJackpotData] = useState<any>(null);
+    const [isLoadingRevenue, setIsLoadingRevenue] = useState(true);
+
+    // Transaction Monitor State
+    const [transactions, setTransactions] = useState<any[]>([]);
+    const [transactionSummary, setTransactionSummary] = useState<any[]>([]);
+    const [txFilter, setTxFilter] = useState('all');
+    const [isLoadingTx, setIsLoadingTx] = useState(true);
 
     // Issue #5: Bot Control State
     const [selectedTableForBot, setSelectedTableForBot] = useState<string>('t1');
@@ -93,6 +110,87 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
         fetchUsers();
     }, []);
 
+    // Fetch Revenue & Jackpot Data
+    useEffect(() => {
+        const fetchRevenueData = async () => {
+            try {
+                const [revenueRes, jackpotRes] = await Promise.all([
+                    fetch('http://localhost:4000/api/admin/revenue'),
+                    fetch('http://localhost:4000/api/admin/jackpot')
+                ]);
+                
+                if (revenueRes.ok) setRevenueData(await revenueRes.json());
+                if (jackpotRes.ok) setJackpotData(await jackpotRes.json());
+            } catch (e) {
+                console.error('Failed to fetch revenue:', e);
+            } finally {
+                setIsLoadingRevenue(false);
+            }
+        };
+        fetchRevenueData();
+        const interval = setInterval(fetchRevenueData, 30000); // Refresh every 30s
+        return () => clearInterval(interval);
+    }, []);
+
+    // Fetch Transactions
+    useEffect(() => {
+        const fetchTransactions = async () => {
+            try {
+                const res = await fetch(`http://localhost:4000/api/admin/transactions?type=${txFilter}&limit=100`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setTransactions(data.transactions || []);
+                    setTransactionSummary(data.summary || []);
+                }
+            } catch (e) {
+                console.error('Failed to fetch transactions:', e);
+            } finally {
+                setIsLoadingTx(false);
+            }
+        };
+        fetchTransactions();
+    }, [txFilter]);
+
+    // Fetch real-time stats from backend
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const res = await fetch('http://localhost:4000/api/stats');
+                const stats = await res.json();
+                setActivePlayersOnline(stats.activePlayers || 0);
+                
+                // Fetch tables info
+                const tablesRes = await fetch('http://localhost:4000/api/tables');
+                const tables = await tablesRes.json();
+                setActiveTables(tables.length || 0);
+                setRealTables(tables);
+            } catch (e) {
+                console.error('Failed to fetch stats:', e);
+            }
+        };
+        fetchStats();
+        const interval = setInterval(fetchStats, 10000); // Refresh every 10s
+        return () => clearInterval(interval);
+    }, []);
+
+    // Fetch real-time logs from backend via socket
+    useEffect(() => {
+        if (!socket) return;
+        
+        socket.on('serverLog', (log: any) => {
+            setSystemLogs(prev => [{
+                id: Date.now(),
+                type: log.type || 'info',
+                time: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                msg: log.message
+            }, ...prev].slice(0, 100)); // Keep last 100 logs
+        });
+
+        return () => {
+            socket.off('serverLog');
+        };
+    }, [socket]);
+
     // Issue #5 & #6: Socket event listeners for admin controls
     useEffect(() => {
         if (!socket) return;
@@ -111,10 +209,26 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
             console.log('[Admin] Game speed updated:', data);
         });
 
+        socket.on('adminTableResult', (result: any) => {
+            if (result.success) {
+                alert(result.message);
+                // Refresh tables list
+                fetch('http://localhost:4000/api/tables')
+                    .then(res => res.json())
+                    .then(tables => {
+                        setActiveTables(tables.length || 0);
+                        setRealTables(tables);
+                    });
+            } else {
+                alert('Error: ' + result.message);
+            }
+        });
+
         return () => {
             socket.off('adminBotResult');
             socket.off('adminSpeedResult');
             socket.off('gameSpeedUpdated');
+            socket.off('adminTableResult');
         };
     }, [socket]);
 
@@ -123,10 +237,9 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
         baseRake: 3.0,
         maxHostShare: 40,
         referrerShare: PROTOCOL_FEE_SPLIT.referrerMax,
-        buybackShare: PROTOCOL_FEE_SPLIT.buyback,
         jackpotShare: PROTOCOL_FEE_SPLIT.jackpot,
         globalPoolShare: PROTOCOL_FEE_SPLIT.globalPool,
-        devShare: 30, 
+        devShare: 40, 
     });
 
     useEffect(() => {
@@ -211,6 +324,7 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
                     { id: 'overview', label: 'Overview', icon: <Activity size={16}/> },
                     { id: 'users', label: 'User Management', icon: <Users size={16}/> },
                     { id: 'games', label: 'Game Monitor', icon: <Eye size={16}/> },
+                    { id: 'transactions', label: 'Transactions', icon: <Wallet size={16}/> },
                     { id: 'logs', label: 'System Logs', icon: <Terminal size={16}/> },
                 ].map(tab => (
                     <button
@@ -233,7 +347,7 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
                     <ShieldAlert size={32} className="text-red-500" />
                     <div>
                         <h3 className="text-red-500 font-bold text-lg">PROTOCOL PAUSED</h3>
-                        <p className="text-red-300 text-sm">All deposits, game creations, and staking actions are currently suspended. Withdrawals remain active.</p>
+                        <p className="text-red-300 text-sm">All deposits and game creations are currently suspended. Withdrawals remain active.</p>
                     </div>
                 </div>
             )}
@@ -409,26 +523,122 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
                                 <span className="text-gray-400 text-xs font-bold uppercase">Active Tables</span>
                                 <Activity size={16} className="text-sol-blue"/>
                             </div>
-                            <div className="text-2xl font-mono font-bold text-white">24</div>
-                            <div className="text-xs text-gray-500 mt-1">142 Players Online</div>
-                        </Card>
-                        <Card className="bg-white/5 border-white/5 hover:border-sol-purple/30 transition-colors">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="text-gray-400 text-xs font-bold uppercase">Total Staked</span>
-                                <Database size={16} className="text-sol-purple"/>
-                            </div>
-                            <div className="text-2xl font-mono font-bold text-white">{(STAKING_POOL_INFO.tvl / 1000000).toFixed(1)}M SPX</div>
-                            <div className="text-xs text-gray-500 mt-1">TVL: $1.8M</div>
+                            <div className="text-2xl font-mono font-bold text-white">{activeTables}</div>
+                            <div className="text-xs text-gray-500 mt-1">{activePlayersOnline} Players Online</div>
                         </Card>
                         <Card className="bg-white/5 border-white/5 hover:border-yellow-500/30 transition-colors">
                             <div className="flex justify-between items-start mb-2">
                                 <span className="text-gray-400 text-xs font-bold uppercase">Total Users</span>
                                 <Users size={16} className="text-yellow-500"/>
                             </div>
-                            <div className="text-2xl font-mono font-bold text-white">2,405</div>
-                            <div className="text-xs text-sol-green mt-1">+45 today</div>
+                            <div className="text-2xl font-mono font-bold text-white">{usersList.length.toLocaleString()}</div>
+                            <div className="text-xs text-sol-green mt-1">From Database</div>
                         </Card>
                     </div>
+
+                    {/* Revenue Dashboard */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <Card className="bg-gradient-to-br from-green-900/20 to-green-800/10 border-green-500/30">
+                            <div className="flex justify-between items-start mb-2">
+                                <span className="text-green-400 text-xs font-bold uppercase flex items-center gap-1">
+                                    <PieChart size={12}/> Total Rake
+                                </span>
+                            </div>
+                            <div className="text-2xl font-mono font-bold text-white">
+                                {revenueData?.totalRake?.toLocaleString() || '0'} <span className="text-sm">chips</span>
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">All-time rake collected</div>
+                        </Card>
+                        <Card className="bg-gradient-to-br from-purple-900/20 to-purple-800/10 border-purple-500/30">
+                            <div className="flex justify-between items-start mb-2">
+                                <span className="text-purple-400 text-xs font-bold uppercase">Developer Share</span>
+                            </div>
+                            <div className="text-2xl font-mono font-bold text-white">
+                                {revenueData?.developerShare?.toLocaleString() || '0'} <span className="text-sm">chips</span>
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">Your earnings</div>
+                        </Card>
+                        <Card className="bg-gradient-to-br from-yellow-900/20 to-yellow-800/10 border-yellow-500/30">
+                            <div className="flex justify-between items-start mb-2">
+                                <span className="text-yellow-400 text-xs font-bold uppercase">Jackpot Pool</span>
+                            </div>
+                            <div className="text-2xl font-mono font-bold text-white">
+                                {revenueData?.jackpotBalance?.toLocaleString() || '0'} <span className="text-sm">chips</span>
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">Ready for distribution</div>
+                        </Card>
+                        <Card className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 border-blue-500/30">
+                            <div className="flex justify-between items-start mb-2">
+                                <span className="text-blue-400 text-xs font-bold uppercase">Global Pool</span>
+                            </div>
+                            <div className="text-2xl font-mono font-bold text-white">
+                                {revenueData?.globalPoolBalance?.toLocaleString() || '0'} <span className="text-sm">chips</span>
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">Partner rewards</div>
+                        </Card>
+                    </div>
+
+                    {/* Jackpot Control Panel */}
+                    <Card className="bg-gradient-to-r from-yellow-900/20 to-orange-900/20 border-yellow-500/50">
+                        <div className="p-6 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <Trophy size={24} className="text-yellow-400" />
+                                    <div>
+                                        <h3 className="text-lg font-bold text-white">Jackpot Control Panel</h3>
+                                        <p className="text-sm text-gray-400">Manage weekly jackpot distributions</p>
+                                    </div>
+                                </div>
+                                <Button 
+                                    onClick={() => {
+                                        if (confirm('Are you sure you want to trigger manual jackpot distribution? This will distribute the current jackpot pool to eligible players.')) {
+                                            fetch('http://localhost:4000/api/admin/jackpot/trigger', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ adminWallet: user?.walletAddress })
+                                            })
+                                            .then(res => res.json())
+                                            .then(data => {
+                                                if (data.success) {
+                                                    alert(`Jackpot distributed! ${data.totalDistributed} chips sent to ${data.recipients} players`);
+                                                } else {
+                                                    alert('Failed to distribute jackpot: ' + data.error);
+                                                }
+                                            })
+                                            .catch(err => alert('Error: ' + err.message));
+                                        }
+                                    }}
+                                    className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold gap-2"
+                                >
+                                    <Trophy size={16} /> Trigger Manual Distribution
+                                </Button>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-white/10">
+                                <div className="bg-black/20 rounded-lg p-4 border border-white/10">
+                                    <div className="text-xs text-gray-400 uppercase font-bold mb-1">Top 3 Players Pool (30%)</div>
+                                    <div className="text-lg font-mono text-sol-green">
+                                        {((revenueData?.jackpotBalance || 0) * 0.3).toLocaleString()} chips
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 mt-1">50% / 30% / 20% split</div>
+                                </div>
+                                <div className="bg-black/20 rounded-lg p-4 border border-white/10">
+                                    <div className="text-xs text-gray-400 uppercase font-bold mb-1">Top 3 Earners Pool (30%)</div>
+                                    <div className="text-lg font-mono text-sol-green">
+                                        {((revenueData?.jackpotBalance || 0) * 0.3).toLocaleString()} chips
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 mt-1">50% / 30% / 20% split</div>
+                                </div>
+                                <div className="bg-black/20 rounded-lg p-4 border border-white/10">
+                                    <div className="text-xs text-gray-400 uppercase font-bold mb-1">Lucky Draw Pool (40%)</div>
+                                    <div className="text-lg font-mono text-sol-green">
+                                        {((revenueData?.jackpotBalance || 0) * 0.4).toLocaleString()} chips
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 mt-1">10 random winners</div>
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {/* Economic Configuration */}
@@ -496,18 +706,6 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
                                         </div>
                                         <div>
                                             <div className="flex justify-between text-xs mb-1">
-                                                <span className="text-orange-500 font-bold">Token Buyback & Burn</span>
-                                                <span className="text-white">{config.buybackShare}%</span>
-                                            </div>
-                                            <input 
-                                                type="range" min="0" max="50" 
-                                                value={config.buybackShare} 
-                                                onChange={(e) => setConfig({...config, buybackShare: parseInt(e.target.value)})}
-                                                className="w-full accent-orange-500 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                                            />
-                                        </div>
-                                        <div>
-                                            <div className="flex justify-between text-xs mb-1">
                                                 <span className="text-sol-blue font-bold">Global Partner Pool</span>
                                                 <span className="text-white">{config.globalPoolShare}%</span>
                                             </div>
@@ -543,20 +741,21 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
                                 <div className="space-y-3">
                                     <CheckItem label="Smart Contract Deployed (Devnet)" checked={true} />
                                     <CheckItem label="Vault Connection Verified" checked={vaultBalance !== null} />
-                                    <CheckItem label="Game Logic (Client-Side)" checked={true} />
-                                    <CheckItem label="Admin Wallet Auth" checked={true} />
+                                    <CheckItem label="Backend Game Server (Node.js)" checked={true} />
+                                    <CheckItem label="Real-time WebSockets (Socket.io)" checked={true} />
+                                    <CheckItem label="Provably Fair RNG System" checked={true} />
+                                    <CheckItem label="Rake Distribution System" checked={true} />
                                     <div className="my-4 border-t border-white/5"></div>
-                                    <CheckItem label="Backend Game Server (Node.js)" checked={false} isNext />
-                                    <CheckItem label="Real-time WebSockets" checked={false} />
-                                    <CheckItem label="Secure Withdrawal Signatures" checked={false} />
-                                    <CheckItem label="Audit & Mainnet Launch" checked={false} />
+                                    <CheckItem label="Production RPC Setup" checked={false} isNext />
+                                    <CheckItem label="Security Audit" checked={false} />
+                                    <CheckItem label="Mainnet Deployment" checked={false} />
                                 </div>
-                                <div className="mt-6 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                                    <p className="text-xs text-yellow-500 font-bold mb-1 flex items-center gap-2">
-                                        <AlertTriangle size={12}/> CTO Note:
+                                <div className="mt-6 p-3 bg-sol-green/10 border border-sol-green/20 rounded-lg">
+                                    <p className="text-xs text-sol-green font-bold mb-1 flex items-center gap-2">
+                                        <CheckCircle size={12}/> Status:
                                     </p>
                                     <p className="text-xs text-gray-400">
-                                        The current game logic is client-side. Before mainnet, we MUST implement a Node.js backend to handle card shuffling securely.
+                                        Backend server with provably fair RNG is complete. Next: Production deployment and security audit.
                                     </p>
                                 </div>
                             </Card>
@@ -659,39 +858,55 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
             {activeTab === 'games' && (
                 <div className="space-y-4 animate-in slide-in-from-right-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {MOCK_TABLES.map(table => (
-                            <Card key={table.id} className="bg-white/5 border-white/10 hover:border-white/20 transition-all group">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h3 className="font-bold text-white text-lg group-hover:text-sol-blue transition-colors">{table.name}</h3>
-                                        <p className="text-xs text-gray-400 font-mono">ID: {table.id}</p>
+                        {realTables.length === 0 ? (
+                            <div className="col-span-3 text-center py-12 text-gray-500">
+                                <Activity size={48} className="mx-auto mb-4 opacity-50" />
+                                <p>No active tables</p>
+                            </div>
+                        ) : (
+                            realTables.map((table: any) => (
+                                <Card key={table.tableId} className="bg-white/5 border-white/10 hover:border-white/20 transition-all group">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <h3 className="font-bold text-white text-lg group-hover:text-sol-blue transition-colors">{table.name || table.tableId}</h3>
+                                            <p className="text-xs text-gray-400 font-mono">ID: {table.tableId}</p>
+                                        </div>
+                                        <span className="bg-green-500/10 text-green-500 px-2 py-1 rounded text-xs font-bold animate-pulse">LIVE</span>
                                     </div>
-                                    <span className="bg-green-500/10 text-green-500 px-2 py-1 rounded text-xs font-bold animate-pulse">LIVE</span>
-                                </div>
-                                <div className="space-y-2 mb-6">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-gray-400">Blinds</span>
-                                        <span className="text-white">${table.smallBlind}/${table.bigBlind}</span>
+                                    <div className="space-y-2 mb-6">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-400">Blinds</span>
+                                            <span className="text-white">${table.smallBlind}/${table.bigBlind}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-400">Players</span>
+                                            <span className="text-white">{table.players?.length || 0}/{table.maxSeats || 6}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-400">Pot</span>
+                                            <span className="text-sol-green font-mono">${table.pot?.toLocaleString() || 0}</span>
+                                        </div>
                                     </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-gray-400">Seats</span>
-                                        <span className="text-white">{table.occupiedSeats}/{table.seats}</span>
+                                    <div className="flex gap-2">
+                                        <Button 
+                                            size="sm" 
+                                            variant="danger" 
+                                            className="flex-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={() => {
+                                                if (socket && user && confirm(`Are you sure you want to close table ${table.tableId}?`)) {
+                                                    socket.emit('adminCloseTable', { tableId: table.tableId, adminWallet: user.walletAddress });
+                                                }
+                                            }}
+                                        >
+                                            <Trash2 size={14} className="mr-1"/> Close
+                                        </Button>
+                                        <Button size="sm" variant="secondary" className="flex-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Eye size={14} className="mr-1"/> Spectate
+                                        </Button>
                                     </div>
-                                     <div className="flex justify-between text-sm">
-                                        <span className="text-gray-400">Pot (Est)</span>
-                                        <span className="text-sol-green font-mono">$1,250</span>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <Button size="sm" variant="danger" className="flex-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Trash2 size={14} className="mr-1"/> Close
-                                    </Button>
-                                    <Button size="sm" variant="secondary" className="flex-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Eye size={14} className="mr-1"/> Spectate
-                                    </Button>
-                                </div>
-                            </Card>
-                        ))}
+                                </Card>
+                            ))
+                        )}
                     </div>
                     
                     <div className="bg-sol-dark p-4 rounded-xl border border-white/10 flex items-center justify-between">
@@ -712,32 +927,141 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
                 </div>
             )}
 
+            {/* TRANSACTIONS TAB */}
+            {activeTab === 'transactions' && (
+                <div className="space-y-4 animate-in slide-in-from-right-4">
+                    <div className="flex justify-between gap-4 bg-white/5 p-4 rounded-xl border border-white/5">
+                        <div className="flex gap-2">
+                            {['all', 'deposit', 'withdrawal', 'game_win', 'rake'].map(filter => (
+                                <button
+                                    key={filter}
+                                    onClick={() => setTxFilter(filter)}
+                                    className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                                        txFilter === filter
+                                            ? 'bg-sol-green text-black'
+                                            : 'bg-black/40 text-gray-400 hover:text-white'
+                                    }`}
+                                >
+                                    {filter === 'all' ? 'All' : filter.replace('_', ' ').toUpperCase()}
+                                </button>
+                            ))}
+                        </div>
+                        <Button 
+                            variant="outline" 
+                            className="shrink-0 gap-2"
+                            onClick={() => {
+                                fetch('http://localhost:4000/api/admin/transactions?limit=100')
+                                    .then(res => res.json())
+                                    .then(data => setTransactions(data.transactions || []))
+                                    .catch(err => console.error('Failed to refresh transactions:', err));
+                            }}
+                        >
+                            <RefreshCw size={16}/> Refresh
+                        </Button>
+                    </div>
+
+                    <div className="bg-sol-dark border border-white/10 rounded-xl overflow-hidden">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-black/20 text-gray-400 font-bold uppercase text-xs">
+                                <tr>
+                                    <th className="p-4">Time</th>
+                                    <th className="p-4">Type</th>
+                                    <th className="p-4">User</th>
+                                    <th className="p-4 text-right">Amount</th>
+                                    <th className="p-4">Status</th>
+                                    <th className="p-4">TX Hash</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {transactions
+                                    .filter(tx => txFilter === 'all' || tx.type === txFilter)
+                                    .map((tx) => (
+                                    <tr key={tx.id} className="hover:bg-white/5 transition-colors">
+                                        <td className="p-4 text-gray-400 text-xs font-mono">
+                                            {new Date(tx.timestamp).toLocaleString()}
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                                tx.type === 'deposit' ? 'bg-green-500/10 text-green-500' :
+                                                tx.type === 'withdrawal' ? 'bg-red-500/10 text-red-500' :
+                                                tx.type === 'game_win' ? 'bg-yellow-500/10 text-yellow-500' :
+                                                'bg-sol-blue/10 text-sol-blue'
+                                            }`}>
+                                                {tx.type === 'deposit' && <ArrowDownCircle size={12} className="inline mr-1" />}
+                                                {tx.type === 'withdrawal' && <ArrowUpCircle size={12} className="inline mr-1" />}
+                                                {tx.type.replace('_', ' ').toUpperCase()}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 font-mono text-gray-300 text-xs">
+                                            {tx.userId?.slice(0, 8)}...
+                                        </td>
+                                        <td className="p-4 text-right font-mono">
+                                            <span className={tx.type === 'withdrawal' ? 'text-red-400' : 'text-sol-green'}>
+                                                {tx.type === 'withdrawal' ? '-' : '+'}{tx.amount?.toLocaleString()} chips
+                                            </span>
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                                tx.status === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                                                tx.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
+                                                'bg-red-500/10 text-red-500 border border-red-500/20'
+                                            }`}>
+                                                {tx.status?.toUpperCase() || 'COMPLETED'}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 font-mono text-gray-500 text-xs">
+                                            {tx.txSignature ? `${tx.txSignature.slice(0, 10)}...` : '-'}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {transactions.length === 0 && (
+                                    <tr>
+                                        <td colSpan={6} className="p-8 text-center text-gray-500">
+                                            <Wallet size={32} className="mx-auto mb-2 opacity-50" />
+                                            No transactions found
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
             {/* LOGS TAB */}
             {activeTab === 'logs' && (
                 <div className="space-y-4 animate-in slide-in-from-right-4">
                     <Card className="bg-[#0c0c0c] border-white/10 font-mono text-sm h-[500px] overflow-y-auto p-0 relative">
                         <div className="sticky top-0 bg-[#1a1a1a] border-b border-white/10 p-2 px-4 flex justify-between items-center">
-                            <span className="text-gray-400 text-xs font-bold uppercase">System Terminal</span>
+                            <span className="text-gray-400 text-xs font-bold uppercase">System Terminal (Live)</span>
                             <span className="flex gap-1.5">
                                 <span className="w-3 h-3 rounded-full bg-red-500"/>
                                 <span className="w-3 h-3 rounded-full bg-yellow-500"/>
-                                <span className="w-3 h-3 rounded-full bg-green-500"/>
+                                <span className="w-3 h-3 rounded-full bg-green-500 animate-pulse"/>
                             </span>
                         </div>
                         <div className="p-4 space-y-2">
-                            {MOCK_LOGS.map((log) => (
-                                <div key={log.id} className="flex gap-4 hover:bg-white/5 p-1 rounded">
-                                    <span className="text-gray-500 shrink-0">[{log.time}]</span>
-                                    <span className={`
-                                        ${log.type === 'info' ? 'text-blue-400' : 
-                                          log.type === 'success' ? 'text-green-400' :
-                                          log.type === 'warning' ? 'text-yellow-400' : 'text-red-500'}
-                                    `}>
-                                        {log.type.toUpperCase()}
-                                    </span>
-                                    <span className="text-gray-300">{log.msg}</span>
+                            {systemLogs.length === 0 ? (
+                                <div className="text-gray-500 text-center py-8">
+                                    <Terminal size={32} className="mx-auto mb-2 opacity-50" />
+                                    <p>Waiting for server events...</p>
+                                    <p className="text-xs mt-1">Logs will appear here in real-time</p>
                                 </div>
-                            ))}
+                            ) : (
+                                systemLogs.map((log) => (
+                                    <div key={log.id} className="flex gap-4 hover:bg-white/5 p-1 rounded">
+                                        <span className="text-gray-500 shrink-0">[{log.time}]</span>
+                                        <span className={`
+                                            ${log.type === 'info' ? 'text-blue-400' : 
+                                              log.type === 'success' ? 'text-green-400' :
+                                              log.type === 'warning' ? 'text-yellow-400' : 'text-red-500'}
+                                        `}>
+                                            {log.type.toUpperCase()}
+                                        </span>
+                                        <span className="text-gray-300">{log.msg}</span>
+                                    </div>
+                                ))
+                            )}
                             <div className="animate-pulse text-sol-green">_</div>
                         </div>
                     </Card>
@@ -746,11 +1070,7 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
                             variant="outline" 
                             size="sm" 
                             className="gap-2"
-                            onClick={() => {
-                                if (confirm('Are you sure you want to clear all logs?')) {
-                                    alert('Log clearing would be implemented via backend API call');
-                                }
-                            }}
+                            onClick={() => setSystemLogs([])}
                         >
                             <AlertTriangle size={14}/> Clear Logs
                         </Button>

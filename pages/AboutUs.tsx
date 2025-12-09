@@ -36,7 +36,7 @@ export const AboutUs: React.FC = () => {
     {
       icon: <PieChart size={32} className="text-red-500" />,
       title: "Community Economy",
-      desc: "A deflationary model where platform revenue fuels the ecosystem. 10% of all fees are used to Buyback & Burn $SPX, while 5% feeds a massive Community Jackpot."
+      desc: "Platform revenue fuels the ecosystem. 5% of all fees feed a massive Community Jackpot distributed monthly, while 5% goes to the Global Partner Pool."
     }
   ];
 

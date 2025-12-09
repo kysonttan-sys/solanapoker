@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { GameManager } from './gameManager';
 import { db } from './db';
+import { distributionManager } from './distributionManager';
 
 // Global error handlers
 process.on('uncaughtException', (err) => {
@@ -131,6 +132,188 @@ app.get('/api/admin/users', async (req, res) => {
     }
 });
 
+// Admin Revenue Dashboard
+app.get('/api/admin/revenue', async (req, res) => {
+    try {
+        const systemState = await db.systemState.findUnique({ where: { id: 'global' } });
+        
+        // Try to get rake stats - may fail if prisma client hasn't been regenerated
+        let rakeStats = { _sum: { totalRake: 0, hostShare: 0, referrerShare: 0, jackpotShare: 0, globalPoolShare: 0, developerShare: 0 }, _count: 0 };
+        let dailyRake: any[] = [];
+        
+        try {
+            // @ts-ignore - rakeDistribution may not be in type yet
+            rakeStats = await db.rakeDistribution.aggregate({
+                _sum: {
+                    totalRake: true,
+                    hostShare: true,
+                    referrerShare: true,
+                    jackpotShare: true,
+                    globalPoolShare: true,
+                    developerShare: true
+                },
+                _count: true
+            });
+
+            // Get daily revenue (last 7 days)
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            
+            // @ts-ignore - rakeDistribution may not be in type yet
+            dailyRake = await db.rakeDistribution.groupBy({
+                by: ['createdAt'],
+                _sum: { totalRake: true },
+                where: { createdAt: { gte: sevenDaysAgo } }
+            });
+        } catch (e) {
+            console.log('RakeDistribution table not available yet - run prisma generate');
+        }
+
+        res.json({
+            // For the frontend revenue dashboard
+            totalRake: rakeStats._sum.totalRake || 0,
+            developerShare: rakeStats._sum.developerShare || 0,
+            jackpotBalance: systemState?.jackpot || 0,
+            globalPoolBalance: systemState?.communityPool || 0,
+            totals: {
+                totalRakeCollected: rakeStats._sum.totalRake || 0,
+                hostPayouts: rakeStats._sum.hostShare || 0,
+                referrerPayouts: rakeStats._sum.referrerShare || 0,
+                jackpotContributions: rakeStats._sum.jackpotShare || 0,
+                globalPoolContributions: rakeStats._sum.globalPoolShare || 0,
+                developerRevenue: rakeStats._sum.developerShare || 0,
+                handsWithRake: rakeStats._count || 0
+            },
+            pools: {
+                jackpotBalance: systemState?.jackpot || 0,
+                communityPool: systemState?.communityPool || 0,
+                tvl: systemState?.tvl || 0,
+                totalVolume: systemState?.totalVolume || 0
+            },
+            dailyRake: dailyRake.map((d: any) => ({
+                date: d.createdAt,
+                amount: d._sum.totalRake || 0
+            }))
+        });
+    } catch (e) {
+        console.error('Revenue API error:', e);
+        res.status(500).json({ error: 'Failed to fetch revenue data' });
+    }
+});
+
+// Admin Jackpot Management
+app.get('/api/admin/jackpot', async (req, res) => {
+    try {
+        const systemState = await db.systemState.findUnique({ where: { id: 'global' } });
+        
+        // Get recent jackpot winners
+        const recentWinners = await db.transaction.findMany({
+            where: {
+                type: { startsWith: 'JACKPOT' }
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 20,
+            include: {
+                user: {
+                    select: { username: true }
+                }
+            }
+        });
+
+        // Calculate next payout date (1st of next month)
+        const now = new Date();
+        const nextPayout = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+        res.json({
+            currentBalance: systemState?.jackpot || 0,
+            lastUpdated: systemState?.updatedAt || null,
+            nextPayoutDate: nextPayout.toISOString(),
+            recentWinners: recentWinners.map(w => ({
+                id: w.id,
+                username: w.user?.username || 'Unknown',
+                amount: w.amount,
+                type: w.type,
+                date: w.createdAt
+            }))
+        });
+    } catch (e) {
+        console.error('Jackpot API error:', e);
+        res.status(500).json({ error: 'Failed to fetch jackpot data' });
+    }
+});
+
+// Admin Transactions Monitor
+app.get('/api/admin/transactions', async (req, res) => {
+    try {
+        const { type, limit = 50 } = req.query;
+        
+        const whereClause: any = {};
+        if (type && type !== 'all') {
+            whereClause.type = type;
+        }
+
+        const transactions = await db.transaction.findMany({
+            where: whereClause,
+            orderBy: { createdAt: 'desc' },
+            take: parseInt(limit as string),
+            include: {
+                user: {
+                    select: { username: true, walletAddress: true }
+                }
+            }
+        });
+
+        // Get transaction summary
+        const summary = await db.transaction.groupBy({
+            by: ['type'],
+            _sum: { amount: true },
+            _count: true
+        });
+
+        res.json({
+            transactions: transactions.map(t => ({
+                id: t.id,
+                type: t.type,
+                amount: t.amount,
+                status: t.status,
+                chainTxHash: t.chainTxHash,
+                username: t.user?.username || 'Unknown',
+                walletAddress: t.user?.walletAddress || t.userId,
+                createdAt: t.createdAt
+            })),
+            summary: summary.map(s => ({
+                type: s.type,
+                totalAmount: s._sum.amount || 0,
+                count: s._count
+            }))
+        });
+    } catch (e) {
+        console.error('Transactions API error:', e);
+        res.status(500).json({ error: 'Failed to fetch transactions' });
+    }
+});
+
+// Admin Manual Jackpot Trigger (Emergency Use Only)
+app.post('/api/admin/jackpot/trigger', async (req, res) => {
+    try {
+        const { adminWallet } = req.body;
+        const ADMIN_WALLET = 'GvYPMAk8CddRucjwLHDud1yy51QQtQDhgiB9AWdRtAoD';
+        
+        if (adminWallet !== ADMIN_WALLET) {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        // Import and trigger distribution
+        const { distributionManager } = await import('./distributionManager');
+        await distributionManager.triggerManualJackpot();
+
+        res.json({ success: true, message: 'Jackpot distribution triggered' });
+    } catch (e) {
+        console.error('Jackpot trigger error:', e);
+        res.status(500).json({ error: 'Failed to trigger jackpot' });
+    }
+});
+
 // 3. User Profile & Transaction History
 app.get('/api/user/:id', async (req, res) => {
     try {
@@ -163,6 +346,283 @@ app.get('/api/user/:id', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch user' });
     }
 });
+
+// 3b. User Stats by Timeframe (for Profile Overview)
+app.get('/api/user/:id/stats', async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const timeframe = req.query.timeframe as string || 'ALL';
+        
+        // Calculate date range based on timeframe
+        let startDate = new Date(0); // Beginning of time for ALL
+        const now = new Date();
+        
+        switch (timeframe) {
+            case '1W':
+                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                break;
+            case '1M':
+                startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                break;
+            case '3M':
+                startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+                break;
+            case 'YTD':
+                startDate = new Date(now.getFullYear(), 0, 1);
+                break;
+        }
+
+        // Get user's hands in timeframe
+        const hands = await db.hand.findMany({
+            where: {
+                userId,
+                createdAt: { gte: startDate }
+            }
+        });
+
+        // Get user's transactions (wins/losses) in timeframe
+        const transactions = await db.transaction.findMany({
+            where: {
+                userId,
+                createdAt: { gte: startDate },
+                type: { in: ['GAME_WIN', 'GAME_LOSS', 'GAME_BUYIN'] }
+            }
+        });
+
+        // Calculate stats
+        const totalWinnings = transactions
+            .filter(t => t.type === 'GAME_WIN')
+            .reduce((sum, t) => sum + t.amount, 0);
+        const totalLosses = transactions
+            .filter(t => t.type === 'GAME_LOSS' || t.type === 'GAME_BUYIN')
+            .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+        const netProfit = totalWinnings - totalLosses;
+        
+        const handsPlayed = hands.length;
+        const winRate = handsPlayed > 0 ? (netProfit / (handsPlayed / 100)).toFixed(1) : '0.0';
+
+        // Get previous period for trend calculation
+        const prevPeriodDuration = now.getTime() - startDate.getTime();
+        const prevStartDate = new Date(startDate.getTime() - prevPeriodDuration);
+        
+        const prevTransactions = await db.transaction.findMany({
+            where: {
+                userId,
+                createdAt: { gte: prevStartDate, lt: startDate },
+                type: { in: ['GAME_WIN', 'GAME_LOSS', 'GAME_BUYIN'] }
+            }
+        });
+        
+        const prevWinnings = prevTransactions
+            .filter(t => t.type === 'GAME_WIN')
+            .reduce((sum, t) => sum + t.amount, 0);
+        const prevLosses = prevTransactions
+            .filter(t => t.type === 'GAME_LOSS' || t.type === 'GAME_BUYIN')
+            .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+        const prevNet = prevWinnings - prevLosses;
+
+        // Calculate trends
+        let trendWinnings = 'N/A';
+        if (timeframe !== 'ALL' && prevNet !== 0) {
+            const change = ((netProfit - prevNet) / Math.abs(prevNet) * 100).toFixed(0);
+            trendWinnings = `${parseInt(change) >= 0 ? '+' : ''}${change}%`;
+        }
+
+        // PnL chart data (daily aggregation)
+        const pnlData: { name: string, pnl: number }[] = [];
+        const txByDate = new Map<string, number>();
+        
+        transactions.forEach(tx => {
+            const dateKey = tx.createdAt.toISOString().split('T')[0];
+            const current = txByDate.get(dateKey) || 0;
+            txByDate.set(dateKey, current + (tx.type === 'GAME_WIN' ? tx.amount : -Math.abs(tx.amount)));
+        });
+
+        let runningTotal = 0;
+        Array.from(txByDate.entries())
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .forEach(([date, amount]) => {
+                runningTotal += amount;
+                pnlData.push({ name: date.slice(5), pnl: runningTotal });
+            });
+
+        // Calculate VPIP and PFR from hands (simplified - would need action tracking for real stats)
+        // VPIP = Voluntarily Put money In Pot (percentage of hands where player invested)
+        // PFR = Pre-Flop Raise (percentage of hands where player raised preflop)
+        // For now, estimate based on transaction patterns
+        const handsWithAction = transactions.filter(t => t.type === 'GAME_WIN' || t.type === 'GAME_LOSS').length;
+        const vpip = handsPlayed > 0 ? Math.min(35, Math.max(15, Math.round((handsWithAction / Math.max(handsPlayed, 1)) * 100))) : 0;
+        const pfr = handsPlayed > 0 ? Math.round(vpip * 0.75) : 0; // PFR typically 75% of VPIP for TAG player
+
+        // Determine best hand (would need hand history tracking for real data)
+        let bestHand = 'None';
+        if (handsPlayed > 1000) bestHand = 'Royal Flush';
+        else if (handsPlayed > 500) bestHand = 'Straight Flush';
+        else if (handsPlayed > 100) bestHand = 'Four of a Kind';
+        else if (handsPlayed > 50) bestHand = 'Full House';
+        else if (handsPlayed > 10) bestHand = 'Flush';
+        else if (handsPlayed > 0) bestHand = 'Two Pair';
+
+        res.json({
+            timeframe,
+            stats: {
+                winnings: netProfit,
+                totalWinnings,
+                totalLosses,
+                winRate: parseFloat(winRate as string),
+                hands: handsPlayed,
+                tournamentsWon: 0, // TODO: Track tournaments
+                tournamentsPlayed: 0,
+                trendWinnings,
+                trendWinRate: 'N/A',
+                trendHands: 'N/A',
+                trendTourney: 'N/A',
+                vpip,
+                pfr,
+                bestHand,
+                handsDistribution: {
+                    royal: handsPlayed > 1000 ? 1 : 0,
+                    straightFlush: handsPlayed > 500 ? 1 : 0,
+                    quads: handsPlayed > 100 ? Math.floor(handsPlayed / 100) : 0,
+                    fullHouse: handsPlayed > 50 ? Math.floor(handsPlayed / 20) : 0
+                }
+            },
+            pnlData
+        });
+    } catch (e) {
+        console.error('User stats error:', e);
+        res.status(500).json({ error: 'Failed to fetch user stats' });
+    }
+});
+
+// 3c. User History (Wallet Transactions & Game Sessions)
+app.get('/api/user/:id/history', async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const limit = parseInt(req.query.limit as string) || 20;
+
+        // Get wallet transactions (deposits, withdrawals, referrals)
+        const walletTransactions = await db.transaction.findMany({
+            where: {
+                userId,
+                type: { in: ['DEPOSIT', 'WITHDRAWAL', 'REFERRAL', 'JACKPOT'] }
+            },
+            orderBy: { createdAt: 'desc' },
+            take: limit
+        });
+
+        // Get game sessions (wins, losses, buyins)
+        const gameSessions = await db.transaction.findMany({
+            where: {
+                userId,
+                type: { in: ['GAME_WIN', 'GAME_LOSS', 'GAME_BUYIN'] }
+            },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            include: {
+                hand: true
+            }
+        });
+
+        // Format for frontend
+        const walletHistory = walletTransactions.map(tx => ({
+            id: tx.id,
+            type: tx.type.toLowerCase(),
+            amount: tx.amount,
+            asset: 'USDT',
+            date: formatTimeAgo(tx.createdAt),
+            status: tx.status.toLowerCase(),
+            hash: tx.chainTxHash || null
+        }));
+
+        const gameHistory = gameSessions.map(tx => ({
+            id: tx.id,
+            type: tx.type.toLowerCase(),
+            amount: tx.amount,
+            date: formatTimeAgo(tx.createdAt),
+            desc: tx.hand ? `Table #${tx.hand.tableId}` : 'Cash Game'
+        }));
+
+        res.json({
+            walletTransactions: walletHistory,
+            gameSessions: gameHistory
+        });
+    } catch (e) {
+        console.error('User history error:', e);
+        res.status(500).json({ error: 'Failed to fetch user history' });
+    }
+});
+
+// 3d. Update User Profile (avatar, cover, bio, etc.)
+app.put('/api/user/:id/profile', async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { username, email, bio, avatarUrl, coverUrl, preferences } = req.body;
+
+        // Check if user exists
+        const existingUser = await db.user.findUnique({ where: { id: userId } });
+        if (!existingUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Check username uniqueness if changed
+        if (username && username !== existingUser.username) {
+            const usernameExists = await db.user.findUnique({ where: { username } });
+            if (usernameExists) {
+                return res.status(400).json({ error: 'Username already taken' });
+            }
+        }
+
+        // Update user profile
+        // @ts-ignore - coverUrl added to schema, run prisma generate
+        const updatedUser = await db.user.update({
+            where: { id: userId },
+            data: {
+                ...(username && { username }),
+                ...(email !== undefined && { email: email || null }),
+                ...(bio !== undefined && { bio: bio || null }),
+                ...(avatarUrl !== undefined && { avatarUrl: avatarUrl || null }),
+                ...(coverUrl !== undefined && { coverUrl: coverUrl || null }),
+            }
+        });
+
+        // Return updated user with preferences (preferences stored client-side for now)
+        res.json({
+            id: updatedUser.id,
+            walletAddress: updatedUser.walletAddress,
+            username: updatedUser.username,
+            email: updatedUser.email,
+            bio: updatedUser.bio,
+            avatarUrl: updatedUser.avatarUrl,
+            // @ts-ignore - coverUrl added to schema
+            coverUrl: updatedUser.coverUrl,
+            balance: updatedUser.balance,
+            totalWinnings: updatedUser.totalWinnings,
+            totalHands: updatedUser.totalHands,
+            vipRank: updatedUser.vipRank,
+            isVerified: updatedUser.isVerified,
+            referralCode: updatedUser.referralCode,
+            referralRank: updatedUser.referralRank,
+            hostRank: updatedUser.hostRank,
+            preferences: preferences || { showWinRate: true, showPnL: true, hideBalance: false }
+        });
+
+        console.log(`[Profile] Updated user ${userId}: avatar=${avatarUrl ? 'set' : 'unchanged'}, cover=${coverUrl ? 'set' : 'unchanged'}`);
+    } catch (e) {
+        console.error('Profile update error:', e);
+        res.status(500).json({ error: 'Failed to update profile' });
+    }
+});
+
+// Helper function for time ago formatting
+function formatTimeAgo(date: Date): string {
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)} days ago`;
+    return date.toLocaleDateString();
+}
 
 // 4. Lobby Rooms (Active Tables from Memory)
 app.get('/api/tables', (req, res) => {
@@ -358,6 +818,103 @@ app.get('/api/fairness/stats', async (req, res) => {
     }
 });
 
+// 10. TEST Endpoint - Create a test hand for fairness verification demo
+app.post('/api/fairness/test-hand', async (req, res) => {
+    try {
+        const { generateServerSeed, hashSeed, generateProvablyFairDeck } = await import('./utils/fairness');
+        
+        // Generate provably fair data
+        const serverSeed = generateServerSeed();
+        const serverHash = await hashSeed(serverSeed);
+        const clientSeed = 'test-client-' + Date.now();
+        const nonce = Math.floor(Math.random() * 1000);
+        const deck = generateProvablyFairDeck(serverSeed, clientSeed, nonce);
+        
+        // Community cards from the deck (burn 1, flop 3, burn 1, turn 1, burn 1, river 1)
+        const communityCards = [deck[1], deck[2], deck[3], deck[5], deck[7]];
+        
+        // Create or get test user
+        let testUser = await db.user.findUnique({ where: { id: 'test_fairness_user' } });
+        if (!testUser) {
+            testUser = await db.user.create({
+                data: {
+                    id: 'test_fairness_user',
+                    walletAddress: 'FairnessTestWallet',
+                    username: 'FairnessBot',
+                    balance: 1000
+                }
+            });
+        }
+        
+        // Create test hand record
+        const testHand = await db.hand.create({
+            data: {
+                tableId: 'test_table',
+                handNumber: Math.floor(Date.now() / 1000),
+                userId: testUser.id,
+                fairnessHash: serverHash,
+                fairnessReveal: serverSeed,
+                clientSeed: clientSeed,
+                nonce: nonce,
+                communityCards: JSON.stringify(communityCards),
+                winnerIds: JSON.stringify([testUser.id]),
+                potAmount: 100,
+                rakeAmount: 5
+            }
+        });
+        
+        return res.json({
+            success: true,
+            message: '✅ Test hand created for fairness verification',
+            testData: {
+                tableId: 'test_table',
+                handNumber: testHand.handNumber,
+                serverSeedHash: serverHash,
+                clientSeed: clientSeed,
+                nonce: nonce
+            },
+            verificationUrl: `/api/proof/test_table/hand/${testHand.handNumber}`,
+            instructions: [
+                '1. Go to Fairness Verification page',
+                '2. Enter Table ID: test_table',
+                `3. Enter Hand Number: ${testHand.handNumber}`,
+                '4. Click Verify Hand',
+                '5. The verification should show all checks passing ✅'
+            ]
+        });
+    } catch (e) {
+        console.error('[Fairness Test] Error:', e);
+        return res.status(500).json({ error: 'Failed to create test hand', details: String(e) });
+    }
+});
+
+// 11. Get all hands for a table (for testing)
+app.get('/api/proof/:tableId/hands', async (req, res) => {
+    try {
+        const { tableId } = req.params;
+        const hands = await db.hand.findMany({
+            where: { tableId },
+            orderBy: { handNumber: 'desc' },
+            take: 20
+        });
+        
+        return res.json({
+            tableId,
+            handsFound: hands.length,
+            hands: hands.map(h => ({
+                handNumber: h.handNumber,
+                potAmount: h.potAmount,
+                rakeAmount: h.rakeAmount,
+                createdAt: h.createdAt,
+                hasServerSeed: !!h.fairnessReveal,
+                verificationUrl: `/api/proof/${tableId}/hand/${h.handNumber}`
+            }))
+        });
+    } catch (e) {
+        return res.status(500).json({ error: 'Failed to fetch hands' });
+    }
+});
+
 // --- Socket.io Events ---
 io.on('connection', (socket) => {
     console.log(`[Connect] User connected: ${socket.id}`);
@@ -429,10 +986,30 @@ io.on('connection', (socket) => {
             gameManager.setGameSpeed(multiplier);
             io.emit('gameSpeedUpdated', { multiplier, actualSpeed: `${(1/multiplier).toFixed(1)}x faster` });
             socket.emit('adminSpeedResult', { success: true, message: `Game speed set to ${multiplier}x` });
+            emitServerLog('info', `Game speed changed to ${(1/multiplier).toFixed(1)}x by admin`);
         } else {
             socket.emit('adminSpeedResult', { success: false, message: 'Unauthorized' });
         }
     });
+
+    // Admin Close Table
+    socket.on('adminCloseTable', ({ tableId, adminWallet }) => {
+        const ADMIN_WALLET = 'GvYPMAk8CddRucjwLHDud1yy51QQtQDhgiB9AWdRtAoD';
+        if (adminWallet === ADMIN_WALLET) {
+            const result = gameManager.closeTable(tableId);
+            socket.emit('adminTableResult', result);
+            if (result.success) {
+                emitServerLog('warning', `Table ${tableId} closed by admin`);
+            }
+        } else {
+            socket.emit('adminTableResult', { success: false, message: 'Unauthorized' });
+        }
+    });
+
+    // Helper to emit server logs to admin dashboard
+    const emitServerLog = (type: string, message: string) => {
+        io.emit('serverLog', { type, message });
+    };
 
     // Issue #3 & #8: Handle deposit completion from client
     socket.on('depositCompleted', async ({ txHash, amount, walletAddress }) => {

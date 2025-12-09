@@ -93,7 +93,9 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
 
     // 2. Listen for Game State
     socket.on('gameStateUpdate', (newState: GameState) => {
+        const prevHandNumber = gameState?.handNumber;
         setGameState(newState);
+        
         // If we are waiting to join and see ourselves in the list, stop loading
         if (joinPhase === 'joining' && user) {
             const amISeated = newState.players.some(p => p.id === user.id);
@@ -102,12 +104,17 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
             }
         }
         
-        // Audio Triggers
+        // Play sound when new hand starts
+        if (!isMuted && prevHandNumber !== undefined && newState.handNumber > prevHandNumber) {
+            playGameSound('chip');
+        }
+        
+        // Audio Triggers for actions
         if (!isMuted && newState.lastLog) {
             if (newState.lastLog.includes('fold')) playGameSound('fold');
             else if (newState.lastLog.includes('check')) playGameSound('check');
             else if (newState.lastLog.includes('wins')) playGameSound('win');
-            else playGameSound('chip');
+            else if (newState.lastLog.includes('call') || newState.lastLog.includes('raise')) playGameSound('chip');
         }
     });
 
@@ -249,6 +256,19 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
       if (!isMuted) playGameSound('chip');
   };
 
+  const handleLeaveTable = () => {
+      if (!user || !socket || !tableId) return;
+      
+      const hero = gameState?.players.find(p => p.id === user.id);
+      if (hero && hero.balance > 0) {
+          const confirmMsg = `Are you sure you want to leave?\n\nYour ${hero.balance.toLocaleString()} chips will be returned to your balance.`;
+          if (!confirm(confirmMsg)) return;
+      }
+      
+      socket.emit('leaveTable', { tableId, userId: user.id });
+      navigate('/lobby');
+  };
+
   const handleSendChat = (text: string) => {
       if (socket && user && tableId) {
           socket.emit('sendChatMessage', { tableId, message: text, user });
@@ -275,7 +295,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
         {/* TOP BAR */}
         <div className="flex justify-between items-center px-4 py-2 bg-[#13131F] border-b border-white/10 z-50 h-14 shadow-md">
             <div className="flex items-center gap-4">
-                <button onClick={() => navigate('/lobby')} className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors">
+                <button onClick={handleLeaveTable} className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors" title="Leave Table">
                     <ArrowLeft size={20} />
                 </button>
                 <div className="flex flex-col">
@@ -328,7 +348,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
         )}
 
         {/* TABLE AREA */}
-        <div className="flex-1 relative bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#1a2c2c] via-[#0d1414] to-black overflow-hidden">
+        <div className="flex-1 relative bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#1a2c2c] via-[#0d1414] to-black overflow-hidden flex items-center justify-center">
             <Table 
                 gameState={gameState} 
                 heroId={user?.id || 'spectator'} 
@@ -339,9 +359,9 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
                 showBB={showBB}
             />
             {isSpectator && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 flex items-center gap-2 pointer-events-none">
-                    <Eye size={16} className="text-sol-blue" />
-                    <span className="text-xs font-bold text-white uppercase tracking-wider">Spectator Mode</span>
+                <div className="absolute top-2 left-2 xs:top-3 xs:left-3 sm:top-4 sm:left-4 bg-black/70 backdrop-blur-md px-2 xs:px-3 sm:px-4 py-1 xs:py-1.5 sm:py-2 rounded-lg border border-sol-blue/30 flex items-center gap-1 xs:gap-1.5 sm:gap-2 pointer-events-none z-30">
+                    <Eye size={12} className="text-sol-blue xs:w-[14px] xs:h-[14px] sm:w-4 sm:h-4" />
+                    <span className="text-[9px] xs:text-[10px] sm:text-xs font-bold text-sol-blue uppercase tracking-wider">Spectator</span>
                 </div>
             )}
         </div>
@@ -372,31 +392,31 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
                   />
               ) : !isSpectator && hero ? (
                   // PLAYER WAITING STATE
-                  <div className="w-full bg-[#13131F]/95 backdrop-blur-md flex items-center justify-between px-6 py-4 min-h-[80px]">
-                      <div className="flex items-center gap-3">
+                  <div className="w-full bg-[#13131F]/95 backdrop-blur-md flex items-center justify-between px-2 xs:px-3 sm:px-4 md:px-6 py-2 xs:py-3 sm:py-3 md:py-4 min-h-[60px] xs:min-h-[70px] sm:min-h-[80px]">
+                      <div className="flex items-center gap-2 xs:gap-2.5 sm:gap-3">
                           <div className="relative">
-                              <img src={hero.avatarUrl} className="w-10 h-10 rounded-full border border-sol-green"/>
-                              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-sol-green rounded-full border border-black animate-pulse"></div>
+                              <img src={hero.avatarUrl} className="w-8 h-8 xs:w-9 xs:h-9 sm:w-10 sm:h-10 rounded-full border border-sol-green"/>
+                              <div className="absolute -bottom-0.5 -right-0.5 xs:-bottom-1 xs:-right-1 w-2 h-2 xs:w-2.5 xs:h-2.5 sm:w-3 sm:h-3 bg-sol-green rounded-full border border-black animate-pulse"></div>
                           </div>
                           <div>
-                              <div className="text-white font-bold text-sm">{hero.name} (You)</div>
-                              <div className="text-sol-green text-xs font-mono">${hero.balance.toLocaleString()}</div>
+                              <div className="text-white font-bold text-xs xs:text-sm">{hero.name} <span className="text-[9px] xs:text-[10px] sm:text-xs text-gray-400">(You)</span></div>
+                              <div className="text-sol-green text-[10px] xs:text-xs font-mono">${hero.balance.toLocaleString()}</div>
                           </div>
                       </div>
-                      <div className="text-gray-500 text-sm font-bold uppercase tracking-widest animate-pulse flex items-center gap-2">
-                          <Loader2 size={16} className="animate-spin" /> Waiting for action...
+                      <div className="text-gray-500 text-[10px] xs:text-xs sm:text-sm font-bold uppercase tracking-wider animate-pulse flex items-center gap-1.5 xs:gap-2">
+                          <Loader2 size={12} className="animate-spin xs:w-[14px] xs:h-[14px] sm:w-4 sm:h-4" /> <span className="hidden xs:inline">Waiting...</span>
                       </div>
                   </div>
               ) : (
                   // SPECTATOR / JOIN STATE
-                  <div className="w-full bg-[#13131F]/95 backdrop-blur-md flex items-center justify-center p-4 min-h-[80px]">
+                  <div className="w-full bg-[#13131F]/95 backdrop-blur-md flex items-center justify-center p-2 xs:p-3 sm:p-4 min-h-[60px] xs:min-h-[70px] sm:min-h-[80px]">
                       {joinPhase === 'joining' ? (
-                          <Button disabled className="gap-2 px-8 opacity-80 cursor-not-allowed">
-                              <Loader2 size={18} className="animate-spin" /> Seating you at the table...
+                          <Button disabled className="gap-1.5 xs:gap-2 px-4 xs:px-6 sm:px-8 opacity-80 cursor-not-allowed text-xs xs:text-sm sm:text-base">
+                              <Loader2 size={14} className="animate-spin xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px]" /> Seating...
                           </Button>
                       ) : (
-                          <Button onClick={() => handleJoinRequest()} className="gap-2 shadow-lg shadow-sol-green/20 px-8 text-base font-bold">
-                              <UserPlus size={20} /> Join Game
+                          <Button onClick={() => handleJoinRequest()} className="gap-1.5 xs:gap-2 shadow-lg shadow-sol-green/20 px-4 xs:px-6 sm:px-8 text-xs xs:text-sm sm:text-base font-bold">
+                              <UserPlus size={14} className="xs:w-4 xs:h-4 sm:w-5 sm:h-5" /> Join Game
                           </Button>
                       )}
                   </div>

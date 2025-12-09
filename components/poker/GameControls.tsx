@@ -117,58 +117,52 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
   return (
     <div className="w-full h-full flex flex-col justify-end">
-       <div className="bg-[#13131F] border-t border-white/10 px-4 py-3 pb-4 rounded-t-xl shadow-2xl relative">
+       <div className="bg-[#13131F] border-t border-white/10 px-2 xs:px-3 sm:px-4 py-2 xs:py-2.5 sm:py-3 pb-3 xs:pb-3.5 sm:pb-4 rounded-t-xl shadow-2xl relative">
             
             {/* Top Bar Stats */}
-            <div className="absolute top-0 left-0 right-0 -translate-y-full flex justify-between px-4 pb-2 items-end">
-                <div className="flex gap-2">
+            <div className="absolute top-0 left-0 right-0 -translate-y-full flex justify-between px-2 xs:px-3 sm:px-4 pb-1 xs:pb-1.5 sm:pb-2 items-end">
+                <div className="flex gap-1 xs:gap-1.5 sm:gap-2">
                     {potOdds > 0 && (
-                        <div className="bg-black/80 backdrop-blur text-white px-3 py-1 rounded-t-lg border-t border-x border-white/10 flex items-center gap-2">
-                            <Calculator size={12} className="text-sol-purple"/>
-                            <span className="text-[10px] uppercase font-bold text-gray-400">Pot Odds</span>
-                            <span className="text-sm font-mono font-bold text-sol-purple">{potOdds.toFixed(1)}%</span>
+                        <div className="bg-black/80 backdrop-blur text-white px-1.5 xs:px-2 sm:px-3 py-0.5 xs:py-0.5 sm:py-1 rounded-t-lg border-t border-x border-white/10 flex items-center gap-1 xs:gap-1.5 sm:gap-2">
+                            <Calculator size={10} className="text-sol-purple xs:w-3 xs:h-3 sm:w-3 sm:h-3"/>
+                            <span className="text-[8px] xs:text-[9px] sm:text-[10px] uppercase font-bold text-gray-400 hidden xs:inline">Pot Odds</span>
+                            <span className="text-[10px] xs:text-xs sm:text-sm font-mono font-bold text-sol-purple">{potOdds.toFixed(1)}%</span>
                         </div>
                     )}
                     {/* Gasless Indicator */}
-                    <div className="bg-black/80 backdrop-blur text-white px-3 py-1 rounded-t-lg border-t border-x border-sol-green/20 flex items-center gap-2" title="Game actions are signed off-chain. No gas fees per hand.">
-                        <Zap size={12} className="text-sol-green fill-sol-green animate-pulse"/>
-                        <span className="text-[10px] uppercase font-bold text-gray-400">Gasless Session</span>
+                    <div className="bg-black/80 backdrop-blur text-white px-1.5 xs:px-2 sm:px-3 py-0.5 xs:py-0.5 sm:py-1 rounded-t-lg border-t border-x border-sol-green/20 flex items-center gap-1 xs:gap-1.5 sm:gap-2" title="Game actions are signed off-chain. No gas fees per hand.">
+                        <Zap size={10} className="text-sol-green fill-sol-green animate-pulse xs:w-3 xs:h-3 sm:w-3 sm:h-3"/>
+                        <span className="text-[8px] xs:text-[9px] sm:text-[10px] uppercase font-bold text-gray-400 hidden sm:inline">Gasless</span>
                     </div>
                 </div>
 
                 {showRebuy && onRebuy && (
                     <button 
                         onClick={onRebuy}
-                        className="bg-sol-green/20 hover:bg-sol-green/30 backdrop-blur text-sol-green px-3 py-1 rounded-t-lg border-t border-x border-sol-green/30 flex items-center gap-2 transition-colors ml-auto"
+                        className="bg-sol-green/20 hover:bg-sol-green/30 backdrop-blur text-sol-green px-2 xs:px-2.5 sm:px-3 py-0.5 xs:py-0.5 sm:py-1 rounded-t-lg border-t border-x border-sol-green/30 flex items-center gap-1 xs:gap-1.5 sm:gap-2 transition-colors ml-auto"
                     >
-                        <RefreshCw size={12} className="animate-spin-slow"/>
-                        <span className="text-xs font-bold uppercase">Rebuy Chips</span>
+                        <RefreshCw size={10} className="animate-spin-slow xs:w-3 xs:h-3 sm:w-3 sm:h-3"/>
+                        <span className="text-[9px] xs:text-[10px] sm:text-xs font-bold uppercase">Rebuy</span>
                     </button>
                 )}
             </div>
 
-            <div className="max-w-md mx-auto space-y-3 w-full">
-                     <div className="flex justify-between items-center px-1">
-                          <span className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider">Action Info</span>
-                          <span className="text-[10px] md:text-xs text-gray-300 font-mono">
-                              To call: <span className="text-sol-green font-bold">{fmt(Math.min(toCall, userBalance))}</span> · Min raise to: <span className="text-sol-green font-bold">{fmt(minRaiseTo)}</span> · Stack: <span className="text-sol-green font-bold">{fmt(userBalance)}</span>
-                          </span>
-                     </div>
-                 <div className="flex justify-between items-center px-1">
-                      <span className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider">Your Stack</span>
-                      <span className="text-sol-green font-mono font-bold text-sm shadow-black drop-shadow-sm">{fmt(userBalance)}</span>
+            <div className="max-w-md mx-auto space-y-1.5 xs:space-y-2 sm:space-y-3 w-full">
+                 <div className="flex justify-between items-center px-0.5 xs:px-1">
+                      <span className="text-[9px] xs:text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-wider">Stack</span>
+                      <span className="text-sol-green font-mono font-bold text-xs xs:text-sm sm:text-sm shadow-black drop-shadow-sm">{fmt(userBalance)}</span>
                  </div>
 
-                 <div className="flex gap-2">
+                 <div className="flex gap-1 xs:gap-1.5 sm:gap-2">
                      <PresetBtn onClick={() => applyPreset('min')} label="Min" />
-                     <PresetBtn onClick={() => applyPreset('half')} label="1/2 Pot" />
+                     <PresetBtn onClick={() => applyPreset('half')} label="½" />
                      <PresetBtn onClick={() => applyPreset('pot')} label="Pot" />
                      <PresetBtn onClick={() => applyPreset('max')} label="Max" />
                  </div>
                  
-                 <div className="flex items-center gap-3">
-                     <div className="hidden md:block">
-                         <span className="text-[9px] md:text-xs font-bold font-sans tabular-nums text-gray-400 w-16 text-right">{fmt(raiseAmount)}</span>
+                 <div className="flex items-center gap-2 xs:gap-2.5 sm:gap-3">
+                     <div className="hidden sm:block">
+                         <span className="text-[9px] sm:text-xs font-bold font-sans tabular-nums text-gray-400 w-12 sm:w-16 text-right">{fmt(raiseAmount)}</span>
                      </div>
                      <input 
                         type="range" 
@@ -177,39 +171,39 @@ export const GameControls: React.FC<GameControlsProps> = ({
                         step={sliderStep} 
                         value={raiseAmount} 
                         onChange={(e) => handleSliderChange(Number(e.target.value))}
-                        className="flex-1 accent-sol-green h-2 bg-white/10 rounded-lg appearance-none cursor-pointer w-full"
+                        className="flex-1 accent-sol-green h-1.5 xs:h-2 sm:h-2 bg-white/10 rounded-lg appearance-none cursor-pointer w-full"
                         disabled={minRaise >= userBalance}
                      />
                  </div>
             </div>
        </div>
 
-       <div className="grid grid-cols-3 h-12 md:h-24">
+       <div className="grid grid-cols-3 h-14 xs:h-16 sm:h-20 md:h-24">
             <button 
                 onClick={() => onAction('fold')}
-                className="flex flex-col items-center justify-center bg-[#1A1A1A] border-r border-white/5 hover:bg-red-900/20 active:bg-red-900/40 transition-colors"
+                className="flex flex-col items-center justify-center bg-[#1A1A1A] border-r border-white/5 hover:bg-red-900/20 active:bg-red-900/40 transition-colors gap-0.5 xs:gap-1"
             >
-                <span className="text-red-500 font-bold text-[10px] md:text-xl tracking-wider">FOLD</span>
+                <span className="text-red-500 font-bold text-xs xs:text-sm sm:text-base md:text-xl tracking-wider">FOLD</span>
             </button>
 
             <button 
                 onClick={() => toCall === 0 ? onAction('check') : onAction('call')}
-                className="flex flex-col items-center justify-center bg-[#241b35] border-r border-white/5 hover:bg-[#2f2245] active:bg-[#3a2a5a] transition-colors"
+                className="flex flex-col items-center justify-center bg-[#241b35] border-r border-white/5 hover:bg-[#2f2245] active:bg-[#3a2a5a] transition-colors gap-0.5 xs:gap-1"
             >
-                <span className="text-sol-purple font-bold text-[10px] md:text-xl tracking-wider">
+                <span className="text-sol-purple font-bold text-xs xs:text-sm sm:text-base md:text-xl tracking-wider">
                     {toCall === 0 ? 'CHECK' : isCallAllIn ? 'ALL IN' : 'CALL'}
                 </span>
-                {toCall > 0 && <span className="text-[8px] md:text-sm text-gray-300 font-bold font-sans tabular-nums mt-0.5">{fmt(Math.min(toCall, userBalance))}</span>}
+                {toCall > 0 && <span className="text-[9px] xs:text-[10px] sm:text-xs md:text-sm text-gray-300 font-bold font-sans tabular-nums">{fmt(Math.min(toCall, userBalance))}</span>}
             </button>
 
             <button 
                 onClick={() => onAction('raise', raiseAmount)}
-                className="flex flex-col items-center justify-center bg-[#0d2626] hover:bg-[#113333] active:bg-[#164040] transition-colors"
+                className="flex flex-col items-center justify-center bg-[#0d2626] hover:bg-[#113333] active:bg-[#164040] transition-colors gap-0.5 xs:gap-1"
             >
-                <span className="text-sol-blue font-bold text-[10px] md:text-xl tracking-wider">
+                <span className="text-sol-blue font-bold text-xs xs:text-sm sm:text-base md:text-xl tracking-wider">
                     {isRaiseAllIn ? 'ALL IN' : currentBet === 0 ? 'BET' : 'RAISE'}
                 </span>
-                <span className="text-[8px] md:text-sm text-gray-300 font-bold font-sans tabular-nums mt-0.5">{fmt(raiseAmount)}</span>
+                <span className="text-[9px] xs:text-[10px] sm:text-xs md:text-sm text-gray-300 font-bold font-sans tabular-nums">{fmt(raiseAmount)}</span>
             </button>
        </div>
     </div>
@@ -219,7 +213,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
 const PresetBtn = ({ onClick, label }: { onClick: () => void, label: string }) => (
     <button 
         onClick={onClick} 
-        className="flex-1 py-1.5 bg-white/5 border border-white/10 rounded text-[9px] md:text-xs font-bold text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all uppercase tracking-wide"
+        className="flex-1 py-1 xs:py-1.5 sm:py-1.5 bg-white/5 border border-white/10 rounded text-[8px] xs:text-[9px] sm:text-[10px] md:text-xs font-bold text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all uppercase tracking-wide"
     >
         {label}
     </button>

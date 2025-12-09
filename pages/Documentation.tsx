@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
-import { BookOpen, ShieldCheck, Coins, Network, Layers, Crown, Zap, Lock, Sparkles, Gift, PieChart } from 'lucide-react';
-import { PROTOCOL_FEE_SPLIT, VIP_LEVELS, REFERRAL_TIERS, HOST_TIERS, STAKING_POOL_INFO, PRIZE_POOL_INFO, TOKENOMICS_INFO } from '../constants';
+import { BookOpen, ShieldCheck, Coins, Network, Crown, Zap, Lock, Sparkles, Gift } from 'lucide-react';
+import { PROTOCOL_FEE_SPLIT, VIP_LEVELS, REFERRAL_TIERS, HOST_TIERS, PRIZE_POOL_INFO } from '../constants';
 
 const SECTIONS = [
     { id: 'intro', title: 'Introduction', icon: <BookOpen size={18} /> },
     { id: 'fairness', title: 'Provably Fair & Security', icon: <ShieldCheck size={18} /> },
-    { id: 'economy', title: 'Tokenomics & Fees', icon: <Coins size={18} /> },
+    { id: 'economy', title: 'Fees & Distribution', icon: <Coins size={18} /> },
     { id: 'ecosystem', title: 'Earn: Host & Refer', icon: <Network size={18} /> },
-    { id: 'staking', title: 'Staking & Yield', icon: <Layers size={18} /> },
     { id: 'vip', title: 'VIP Club', icon: <Crown size={18} /> },
 ];
 
@@ -167,13 +166,6 @@ export const Documentation: React.FC = () => {
                                     </div>
                                     <p className="text-xs text-gray-400">Paid to the upline network of players.</p>
                                 </div>
-                                <div className="p-4 rounded-xl bg-gradient-to-br from-orange-500/10 to-transparent border border-orange-500/20">
-                                    <div className="flex justify-between mb-2">
-                                        <span className="text-orange-500 font-bold">Buyback & Burn</span>
-                                        <span className="text-white font-mono">{PROTOCOL_FEE_SPLIT.buyback}%</span>
-                                    </div>
-                                    <p className="text-xs text-gray-400">Used to buy $SPX from market and burn it.</p>
-                                </div>
                                 <div className="p-4 rounded-xl bg-gradient-to-br from-yellow-500/10 to-transparent border border-yellow-500/20">
                                     <div className="flex justify-between mb-2">
                                         <span className="text-yellow-500 font-bold">Community Jackpot</span>
@@ -198,65 +190,6 @@ export const Documentation: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* TOKENOMICS DISTRIBUTION */}
-                        <div className="border-t border-white/5 pt-6 mt-2">
-                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                                <PieChart size={20} className="text-sol-blue"/> Token Supply Distribution ($SPX)
-                            </h3>
-                            <div className="bg-white/5 p-6 rounded-xl border border-white/5">
-                                <div className="flex flex-col md:flex-row items-center gap-8">
-                                    <div className="flex-1 space-y-6">
-                                        <div>
-                                            <p className="text-sm text-gray-400 uppercase tracking-wider font-bold mb-1">Total Max Supply</p>
-                                            <p className="text-3xl font-mono font-bold text-white tracking-tight">{TOKENOMICS_INFO.totalSupply.toLocaleString()} <span className="text-lg text-sol-green">SPX</span></p>
-                                        </div>
-                                        
-                                        <div className="space-y-4">
-                                            <div className="bg-black/40 p-4 rounded-lg border-l-4 border-sol-green flex justify-between items-center">
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="text-sol-green font-bold">{TOKENOMICS_INFO.staking.percent}% Staking Pool</span>
-                                                        <span className="text-xs bg-sol-green/20 text-sol-green px-1.5 py-0.5 rounded border border-sol-green/30">{TOKENOMICS_INFO.staking.vesting}</span>
-                                                    </div>
-                                                    <p className="text-xs text-gray-400">{TOKENOMICS_INFO.staking.desc}</p>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className="text-white font-mono font-bold">{(TOKENOMICS_INFO.staking.amount / 1000000).toLocaleString()}M SPX</div>
-                                                </div>
-                                            </div>
-
-                                            <div className="bg-black/40 p-4 rounded-lg border-l-4 border-sol-blue flex justify-between items-center">
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="text-sol-blue font-bold">{TOKENOMICS_INFO.liquidity.percent}% Liquidity Pool</span>
-                                                        <span className="text-xs bg-sol-blue/20 text-sol-blue px-1.5 py-0.5 rounded border border-sol-blue/30">{TOKENOMICS_INFO.liquidity.lock}</span>
-                                                    </div>
-                                                    <p className="text-xs text-gray-400">{TOKENOMICS_INFO.liquidity.desc}</p>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className="text-white font-mono font-bold">{(TOKENOMICS_INFO.liquidity.amount / 1000000).toLocaleString()}M SPX</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="shrink-0 relative">
-                                        <div 
-                                            className="w-48 h-48 rounded-full border-8 border-sol-dark shadow-2xl relative"
-                                            style={{
-                                                background: `conic-gradient(#00FFAE 0% ${TOKENOMICS_INFO.staking.percent}%, #1D8BFF ${TOKENOMICS_INFO.staking.percent}% 100%)`
-                                            }}
-                                        >
-                                            <div className="absolute inset-0 m-4 bg-sol-dark rounded-full flex items-center justify-center flex-col">
-                                                 <span className="text-gray-400 text-xs uppercase font-bold">Supply</span>
-                                                 <span className="text-3xl font-bold text-white">100%</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                         {/* PRIZE POOL EXPLANATION */}
                         <div className="border-t border-white/5 pt-6 mt-2">
                             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -268,17 +201,30 @@ export const Documentation: React.FC = () => {
                                 </p>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                                    <div className="bg-black/40 p-3 rounded-lg text-center">
-                                        <div className="text-yellow-500 font-bold text-lg">{PRIZE_POOL_INFO.distribution.topPlayer}%</div>
-                                        <div className="text-xs text-gray-500 uppercase">Top Player (Volume)</div>
+                                    <div className="bg-black/40 p-4 rounded-lg">
+                                        <div className="text-yellow-500 font-bold text-lg text-center mb-2">{PRIZE_POOL_INFO.distribution.topPlayer}%</div>
+                                        <div className="text-xs text-gray-500 uppercase text-center mb-3">Top 3 Players (Hands)</div>
+                                        <div className="space-y-1 text-xs">
+                                            <div className="flex justify-between"><span className="text-yellow-400">🥇 1st</span><span className="text-white">50%</span></div>
+                                            <div className="flex justify-between"><span className="text-gray-400">🥈 2nd</span><span className="text-white">30%</span></div>
+                                            <div className="flex justify-between"><span className="text-orange-400">🥉 3rd</span><span className="text-white">20%</span></div>
+                                        </div>
                                     </div>
-                                    <div className="bg-black/40 p-3 rounded-lg text-center">
-                                        <div className="text-sol-blue font-bold text-lg">{PRIZE_POOL_INFO.distribution.topEarner}%</div>
-                                        <div className="text-xs text-gray-500 uppercase">Top Earner (Fees)</div>
+                                    <div className="bg-black/40 p-4 rounded-lg">
+                                        <div className="text-sol-blue font-bold text-lg text-center mb-2">{PRIZE_POOL_INFO.distribution.topEarner}%</div>
+                                        <div className="text-xs text-gray-500 uppercase text-center mb-3">Top 3 Earners (Profit)</div>
+                                        <div className="space-y-1 text-xs">
+                                            <div className="flex justify-between"><span className="text-yellow-400">🥇 1st</span><span className="text-white">50%</span></div>
+                                            <div className="flex justify-between"><span className="text-gray-400">🥈 2nd</span><span className="text-white">30%</span></div>
+                                            <div className="flex justify-between"><span className="text-orange-400">🥉 3rd</span><span className="text-white">20%</span></div>
+                                        </div>
                                     </div>
-                                    <div className="bg-black/40 p-3 rounded-lg text-center">
-                                        <div className="text-sol-purple font-bold text-lg">{PRIZE_POOL_INFO.distribution.luckyDraw}%</div>
-                                        <div className="text-xs text-gray-500 uppercase">10x Lucky Winners</div>
+                                    <div className="bg-black/40 p-4 rounded-lg">
+                                        <div className="text-sol-purple font-bold text-lg text-center mb-2">{PRIZE_POOL_INFO.distribution.luckyDraw}%</div>
+                                        <div className="text-xs text-gray-500 uppercase text-center mb-3">Lucky Draw</div>
+                                        <div className="text-xs text-gray-400 text-center">
+                                            10 random winners<br/>split equally
+                                        </div>
                                     </div>
                                 </div>
 
@@ -288,7 +234,7 @@ export const Documentation: React.FC = () => {
                                     </h4>
                                     <ul className="text-xs text-gray-400 space-y-2">
                                         <li>
-                                            1. <strong>Participation:</strong> Every unique wallet that plays at least 1 hand during the month is entered into the draw.
+                                            1. <strong>Participation:</strong> Every unique wallet that plays at least 10 hands during the month is entered into the draw.
                                         </li>
                                         <li>
                                             2. <strong>Verifiable Randomness:</strong> We use <span className="text-white">Chainlink VRF (Verifiable Random Function)</span> on-chain. This provides cryptographic proof that the winner selection is truly random and cannot be tampered with by the developers.
@@ -361,26 +307,6 @@ export const Documentation: React.FC = () => {
                                 </table>
                             </div>
                         </div>
-                    </Card>
-                </section>
-
-                {/* Staking */}
-                <section id="staking" className="scroll-mt-32">
-                    <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-                        <Layers className="text-sol-blue"/> Staking & Yield
-                    </h2>
-                    <Card className="bg-sol-dark/60">
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="text-3xl font-bold text-sol-green font-mono">{STAKING_POOL_INFO.apy}% APY</div>
-                            <div className="text-sm text-gray-400 max-w-md">
-                                Stake $SPX tokens to earn passive income. Yield is generated from platform revenue buybacks and token inflation.
-                            </div>
-                        </div>
-                        <ul className="space-y-3 text-sm text-gray-300">
-                            <li className="flex items-center gap-2"><Lock size={14} className="text-sol-green"/> <strong>No Lock-up:</strong> You can unstake at any time.</li>
-                            <li className="flex items-center gap-2"><Coins size={14} className="text-sol-green"/> <strong>Auto-Compounding:</strong> Rewards are added to your stake automatically.</li>
-                            <li className="flex items-center gap-2"><ShieldCheck size={14} className="text-sol-green"/> <strong>Deflationary:</strong> {PROTOCOL_FEE_SPLIT.buyback}% of all poker rake is used to burn SPX, increasing scarcity.</li>
-                        </ul>
                     </Card>
                 </section>
 

@@ -42,6 +42,20 @@ export const DepositWithdraw: React.FC<{
         });
     }, [connected, publicKey, wallet]);
 
+    // Function to refresh on-chain wallet balance
+    const refreshOnChainBalance = async () => {
+        if (!publicKey) return;
+        try {
+            const lamports = await connection.getBalance(publicKey);
+            const solBalance = lamports / 1000000000;
+            const chips = Math.floor(solBalance * 100000);
+            setOnChainBalance(chips);
+            console.log('[DepositWithdraw] On-chain balance refreshed:', chips);
+        } catch (e) {
+            console.error('[DepositWithdraw] Failed to refresh on-chain balance:', e);
+        }
+    };
+
     useEffect(() => {
         if (!isOpen || !publicKey) return;
         
@@ -151,6 +165,9 @@ export const DepositWithdraw: React.FC<{
             if (onBalanceUpdate) {
                 onBalanceUpdate(newBalance);
             }
+            
+            // Refresh on-chain balance after deposit
+            await refreshOnChainBalance();
         } catch (error) {
             console.error('Deposit error:', error);
             setTxStatus({
@@ -224,6 +241,9 @@ export const DepositWithdraw: React.FC<{
             if (onBalanceUpdate) {
                 onBalanceUpdate(newBalance);
             }
+            
+            // Refresh on-chain balance after withdrawal
+            await refreshOnChainBalance();
         } catch (error) {
             console.error('Withdrawal error:', error);
             setTxStatus({

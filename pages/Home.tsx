@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Filter, Plus, Award, ArrowRight, Coins, Users, Layers, Activity, Globe, Zap, CheckCircle, Gift, Crown, Timer, Sparkles } from 'lucide-react';
 import { Button } from '../components/ui/Button';
@@ -17,6 +17,30 @@ interface HomeProps {
 export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables, tournaments }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'cash' | 'tournament' | 'fun'>('cash');
+  
+  // Countdown timer to 1st of next month (Jackpot payout)
+  const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0 });
+  
+  // Jackpot pool balance from database
+  const [jackpotBalance, setJackpotBalance] = useState(0);
+  
+  useEffect(() => {
+    const calculateCountdown = () => {
+      const now = new Date();
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0);
+      const diff = nextMonth.getTime() - now.getTime();
+      
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      
+      setCountdown({ days, hours, minutes });
+    };
+    
+    calculateCountdown();
+    const interval = setInterval(calculateCountdown, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, []);
 
   // Filter & Sort Logic:
   // 1. Hide full rooms (occupiedSeats < seats / registeredPlayers < maxPlayers)
@@ -58,6 +82,8 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables, to
           { label: 'Active Players', value: `${data.activePlayers || 0}`, icon: <Users size={18} className="text-sol-blue" />, sub: 'Online Now' },
           { label: 'Avg Payout', value: '< 2s', icon: <Zap size={18} className="text-sol-green" />, sub: 'Instant Settlement' },
         ]);
+        // Update jackpot balance from database
+        setJackpotBalance(data.jackpot || 0);
       } catch (error) {
         console.error('Failed to fetch stats:', error);
       }
@@ -131,15 +157,15 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables, to
               <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                       <span className="bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                          <Sparkles size={10} /> COMMUNITY POOL
+                          <Sparkles size={10} /> JACKPOT POOL
                       </span>
                       <span className="text-yellow-500 text-xs font-mono">5% OF ALL FEES</span>
                   </div>
                   <h2 className="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 mb-2 font-mono tracking-tight">
-                      ${PRIZE_POOL_INFO.currentAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                      ${jackpotBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
                   </h2>
                   <p className="text-gray-400 max-w-md text-sm">
-                      Every hand played contributes to the Community Jackpot. Automatically distributed via smart contract to:
+                      Every hand played contributes to the Monthly Jackpot. Automatically distributed via smart contract to:
                   </p>
               </div>
 
@@ -147,17 +173,17 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables, to
                   <div className="bg-black/40 border border-yellow-500/20 rounded-xl p-3 text-center">
                       <Crown size={20} className="mx-auto text-yellow-500 mb-1" />
                       <div className="text-xl font-bold text-white">{PRIZE_POOL_INFO.distribution.topPlayer}%</div>
-                      <div className="text-[10px] text-gray-500 uppercase">Top Player</div>
+                      <div className="text-[10px] text-gray-500 uppercase">Top 3 Players</div>
                   </div>
                   <div className="bg-black/40 border border-yellow-500/20 rounded-xl p-3 text-center">
                       <Users size={20} className="mx-auto text-sol-blue mb-1" />
                       <div className="text-xl font-bold text-white">{PRIZE_POOL_INFO.distribution.topEarner}%</div>
-                      <div className="text-[10px] text-gray-500 uppercase">Top Earner</div>
+                      <div className="text-[10px] text-gray-500 uppercase">Top 3 Earners</div>
                   </div>
                   <div className="bg-black/40 border border-yellow-500/20 rounded-xl p-3 text-center">
                       <Gift size={20} className="mx-auto text-sol-purple mb-1" />
                       <div className="text-xl font-bold text-white">{PRIZE_POOL_INFO.distribution.luckyDraw}%</div>
-                      <div className="text-[10px] text-gray-500 uppercase">10x Lucky Draw</div>
+                      <div className="text-[10px] text-gray-500 uppercase">10 Lucky Winners</div>
                   </div>
               </div>
 
@@ -165,7 +191,7 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables, to
                   <div className="flex items-center gap-2 justify-end text-gray-400 text-xs uppercase mb-1">
                       <Timer size={14} /> Next Payout
                   </div>
-                  <div className="text-2xl font-bold text-white font-mono">3D 14H 20M</div>
+                  <div className="text-2xl font-bold text-white font-mono">{countdown.days}D {countdown.hours}H {countdown.minutes}M</div>
                   <Button size="sm" variant="outline" className="mt-3 border-yellow-500/50 text-yellow-500 hover:bg-yellow-500 hover:text-black">
                       View Leaderboard
                   </Button>
@@ -199,15 +225,15 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables, to
                </div>
           </div>
 
-          <div className="bg-gradient-to-br from-[#1A1A24] to-[#13131F] border border-sol-blue/30 rounded-xl p-6 relative overflow-hidden group cursor-pointer" onClick={() => navigate('/staking')}>
+          <div className="bg-gradient-to-br from-[#1A1A24] to-[#13131F] border border-sol-blue/30 rounded-xl p-6 relative overflow-hidden group cursor-pointer" onClick={() => navigate('/lobby')}>
                <div className="absolute right-0 top-0 w-32 h-32 bg-sol-blue/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-sol-blue/30 transition-all"></div>
                <div className="relative z-10">
                    <div className="flex items-center gap-2 mb-3">
-                       <div className="p-2 bg-sol-blue/20 rounded-lg text-sol-blue"><Layers size={20} /></div>
-                       <h3 className="text-xl font-bold text-white">Staking</h3>
+                       <div className="p-2 bg-sol-blue/20 rounded-lg text-sol-blue"><Play size={20} /></div>
+                       <h3 className="text-xl font-bold text-white">Play to Earn</h3>
                    </div>
-                   <p className="text-gray-400 text-sm mb-4">Stake $SPX to earn yield. Current <span className="text-sol-green font-bold">24.5% APY</span> rewarded in real-time.</p>
-                   <span className="text-sol-blue text-sm font-bold flex items-center gap-1 group-hover:gap-2 transition-all">View Pool <ArrowRight size={14}/></span>
+                   <p className="text-gray-400 text-sm mb-4">Play more, win more! Top 3 players by hands compete for <span className="text-white font-bold">30%</span> of the monthly jackpot.</p>
+                   <span className="text-sol-blue text-sm font-bold flex items-center gap-1 group-hover:gap-2 transition-all">Start Playing <ArrowRight size={14}/></span>
                </div>
           </div>
       </div>

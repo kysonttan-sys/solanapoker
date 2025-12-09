@@ -24,18 +24,31 @@ export const Table: React.FC<TableProps> = ({ gameState, heroId, timeLeft, total
   // Responsive States
   const [isVertical, setIsVertical] = useState(false);
   const [scale, setScale] = useState(1);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
         const width = window.innerWidth;
         const height = window.innerHeight;
         const vertical = height > width;
+        const mobile = width < 768;
+        
         setIsVertical(vertical);
+        setIsMobile(mobile);
 
         if (!vertical) {
-            if (height < 850) {
-                const scaleFactor = Math.min(1, height / 900); 
-                setScale(scaleFactor < 0.75 ? 0.75 : scaleFactor);
+            // Desktop landscape: scale down for shorter screens
+            if (height < 700) {
+                setScale(0.7);
+            } else if (height < 850) {
+                setScale(0.85);
+            } else {
+                setScale(1);
+            }
+        } else {
+            // Portrait: scale based on width for smaller phones
+            if (width < 375) {
+                setScale(0.85);
             } else {
                 setScale(1);
             }
@@ -120,10 +133,10 @@ export const Table: React.FC<TableProps> = ({ gameState, heroId, timeLeft, total
     <div 
         className={`relative mx-auto select-none transition-all duration-300 ${
             isVertical 
-            ? 'w-[95%] max-w-[420px] md:max-w-[650px] md:w-[85%] h-[70vh] md:h-[75vh] mt-[10vh]' 
-            : `w-full max-w-[1000px] aspect-[16/9] origin-top mt-[5vh]`
+            ? 'w-[98%] max-w-[420px] sm:max-w-[500px] md:max-w-[650px] md:w-[85%] h-[65vh] xs:h-[68vh] sm:h-[72vh] md:h-[75vh] mt-[5vh] xs:mt-[8vh] sm:mt-[10vh]' 
+            : `w-full max-w-[1000px] aspect-[16/9] origin-top mt-[3vh]`
         }`}
-        style={!isVertical ? { transform: `scale(${scale})` } : {}}
+        style={!isVertical ? { transform: `scale(${scale})` } : { transform: `scale(${scale})` }}
     >
       {/* Fairness Verification */}
       {gameState?.phase === 'showdown' && (
@@ -171,31 +184,52 @@ export const Table: React.FC<TableProps> = ({ gameState, heroId, timeLeft, total
          </div>
       </div>
 
-      <div className={`absolute left-1/2 -translate-x-1/2 flex gap-2 md:gap-3 z-10 ${
-          isVertical ? 'top-[42%] flex-wrap justify-center w-[180px] md:w-auto md:flex-nowrap' : 'top-1/2 -translate-y-1/2'
+      <div className={`absolute left-1/2 -translate-x-1/2 flex z-10 ${
+          isVertical 
+            ? 'top-[42%] flex-wrap justify-center max-w-[160px] xs:max-w-[200px] sm:max-w-[260px] gap-1 xs:gap-1.5 sm:gap-2' 
+            : 'top-1/2 -translate-y-1/2 gap-2 md:gap-3'
       }`}>
          {communityCards.length === 0 ? (
-             <div className="flex gap-2 opacity-20">
+             <div className={`flex opacity-20 ${
+               isVertical ? 'gap-1 xs:gap-1.5 sm:gap-2' : 'gap-2'
+             }`}>
                  {[1,2,3,4,5].map(i => (
-                     <div key={i} className="w-10 h-14 md:w-14 md:h-20 rounded border-2 border-white border-dashed"></div>
+                     <div key={i} className={`rounded border-2 border-white border-dashed ${
+                       isVertical 
+                         ? 'w-8 h-11 xs:w-9 xs:h-12 sm:w-11 sm:h-16' 
+                         : 'w-10 h-14 md:w-14 md:h-20'
+                     }`}></div>
                  ))}
              </div>
          ) : (
              communityCards.map((card, idx) => {
                  const isHighlight = allWinningCards.some(wc => wc.rank === card.rank && wc.suit === card.suit);
                  return (
-                    <Card key={idx} suit={card.suit} rank={card.rank} highlight={isHighlight} fourColor={fourColor} />
+                    <Card 
+                      key={idx} 
+                      suit={card.suit} 
+                      rank={card.rank} 
+                      highlight={isHighlight} 
+                      fourColor={fourColor}
+                      size={isVertical && isMobile ? 'sm' : 'md'}
+                    />
                  );
              })
          )}
       </div>
 
       {pot > 0 && (
-         <div className={`absolute left-1/2 -translate-x-1/2 bg-black/90 px-5 py-2 rounded-full border border-sol-green/50 text-white font-bold tabular-nums flex items-center gap-2 backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.5)] z-40 animate-in zoom-in duration-300 ${
-             isVertical ? 'top-[60%]' : 'top-[60%]'
+         <div className={`absolute left-1/2 -translate-x-1/2 bg-black/90 rounded-full border border-sol-green/50 text-white font-bold tabular-nums flex items-center backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.5)] z-40 animate-in zoom-in duration-300 ${
+             isVertical 
+               ? 'top-[58%] xs:top-[60%] px-3 py-1 xs:px-4 xs:py-1.5 sm:px-5 sm:py-2 gap-1 xs:gap-1.5 sm:gap-2' 
+               : 'top-[60%] px-4 py-2 md:px-5 md:py-2 gap-2'
          }`}>
-             <span className="text-sol-green font-extrabold text-xs md:text-sm tracking-wider">POT</span>
-             <span className="font-mono text-sm md:text-lg text-white">{formatPot(pot)}</span>
+             <span className={`text-sol-green font-extrabold tracking-wider ${
+               isVertical ? 'text-[10px] xs:text-xs sm:text-sm' : 'text-xs md:text-sm'
+             }`}>POT</span>
+             <span className={`font-mono text-white ${
+               isVertical ? 'text-xs xs:text-sm sm:text-base' : 'text-sm md:text-lg'
+             }`}>{formatPot(pot)}</span>
          </div>
       )}
 

@@ -4,10 +4,10 @@ export interface User {
   walletAddress: string;
   username: string;
   avatarUrl: string;
+  coverUrl?: string; // Profile cover image URL
   email?: string;
   bio?: string;
   balance: number; // in USDT (Game Currency)
-  spxBalance?: number; // Native Token Balance
   totalHands?: number; // Added for VIP tracking
   friends?: string[]; // List of Friend User IDs
   preferences: {
@@ -34,13 +34,6 @@ export interface User {
     // For Rank Tracking
     directAgents: number; // How many directs are Rank 1
     directBrokers: number; // How many directs are Rank 2
-  };
-  stakingStats?: {
-    stakedAmount: number;
-    rewardsEarned: number; // Claimable
-    totalRewardsClaimed: number; // Lifetime
-    apy: number; // Personal effective APY (bonus based on lock time if implemented)
-    lastStakedTime?: number; // Timestamp of last deposit (resets cooldown)
   };
 }
 

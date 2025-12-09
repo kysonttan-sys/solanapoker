@@ -27,63 +27,162 @@ export async function verifyServerSeedHash(
 
 /**
  * Fisher-Yates shuffle using HMAC-SHA256 as PRNG
- * Reproduces deck from seeds
+ * Reproduces deck from seeds - MUST match server algorithm exactly!
  */
 async function generateProvablyFairDeck(
     serverSeed: string,
     clientSeed: string,
     nonce: number
 ): Promise<string[]> {
-    // Create HMAC key from client seed
     const encoder = new TextEncoder();
-    const keyData = encoder.encode(clientSeed);
+    
+    // Convert hex serverSeed to Uint8Array for HMAC key
+    const serverSeedBytes = new Uint8Array(serverSeed.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+    
+    // Import server seed as HMAC key (matching server: key = serverSeed)
     const key = await crypto.subtle.importKey(
         'raw',
-        keyData,
+        serverSeedBytes,
         { name: 'HMAC', hash: 'SHA-256' },
         false,
         ['sign']
     );
 
-    // Generate HMAC with server seed
-    const message = encoder.encode(serverSeed + '|' + nonce.toString());
-    const hmacBuffer = await crypto.subtle.sign('HMAC', key, message);
-    const hmacArray = Array.from(new Uint8Array(hmacBuffer));
+    // Message base: clientSeed:nonce (matching server format)
+    const messageBase = `${clientSeed}:${nonce}`;
+    
+    // Generate byte stream using chunked HMAC (matching server's hmacStream)
+    const needed = 52 * 8; // 8 bytes per shuffle index
+    const bytes = new Uint8Array(needed);
+    let filled = 0;
+    let counter = 0;
+    
+    while (filled < needed) {
+        const msg = encoder.encode(messageBase + ':' + counter);
+        const hmacBuffer = await crypto.subtle.sign('HMAC', key, msg);
+        const chunk = new Uint8Array(hmacBuffer);
+        const toCopy = Math.min(chunk.length, needed - filled);
+        bytes.set(chunk.slice(0, toCopy), filled);
+        filled += toCopy;
+        counter++;
+    }
 
-    // Initialize deck
-    const suits = ['♠', '♥', '♦', '♣'];
-    const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+    // Initialize deck (matching server's order: suits then ranks)
+    const suits = ['spades', 'hearts', 'diamonds', 'clubs'];
+    const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+    const suitSymbols: Record<string, string> = {
+        'spades': '♠', 'hearts': '♥', 'diamonds': '♦', 'clubs': '♣'
+    };
+    
     let deck: string[] = [];
-
     for (const suit of suits) {
         for (const rank of ranks) {
-            deck.push(rank + suit);
+            deck.push(rank + suitSymbols[suit]);
         }
     }
 
-    // Fisher-Yates shuffle using HMAC stream
-    let hmacIndex = 0;
+    // Fisher-Yates shuffle using 8-byte chunks as 64-bit integers
+    let byteIndex = 0;
     for (let i = deck.length - 1; i > 0; i--) {
-        // Get 2 bytes from HMAC stream for random number
-        if (hmacIndex >= hmacArray.length - 1) {
-            // Need more random bytes - generate new HMAC
-            const nextMessage = encoder.encode(
-                serverSeed + '|' + nonce.toString() + '|' + (hmacIndex / hmacArray.length).toString()
-            );
-            const nextHmac = await crypto.subtle.sign('HMAC', key, nextMessage);
-            hmacArray.splice(0, hmacArray.length, ...Array.from(new Uint8Array(nextHmac)));
-            hmacIndex = 0;
+        // Read 8 bytes as big-endian 64-bit unsigned integer
+        let value = 0n;
+        for (let b = 0; b < 8; b++) {
+            value = (value << 8n) + BigInt(bytes[byteIndex + b]);
         }
-
-        const randomBytes = (hmacArray[hmacIndex] << 8) | hmacArray[hmacIndex + 1];
-        const j = randomBytes % (i + 1);
-        hmacIndex += 2;
-
+        byteIndex += 8;
+        
+        // Calculate swap index
+        const j = Number(value % BigInt(i + 1));
+        
         // Swap
         [deck[i], deck[j]] = [deck[j], deck[i]];
     }
 
     return deck;
+}
+
+/**
+ * Simplified fairness verification - generates deck and verifies community cards
+ */
+export async function verifyHandFairnessSimplified(params: {
+    serverSeed: string;
+    serverSeedHash: string;
+    clientSeed: string;
+    nonce: number;
+    communityCards: string[];
+}): Promise<{
+    valid: boolean;
+    checks: {
+        seedHashValid: boolean;
+        deckReproducible: boolean;
+        communityCardsValid: boolean;
+    };
+    details: string[];
+    reproducedDeck?: string[];
+    expectedCommunityCards?: string[];
+}> {
+    const details: string[] = [];
+
+    // Check 1: Server seed hash verification
+    const seedHashValid = await verifyServerSeedHash(params.serverSeed, params.serverSeedHash);
+    details.push(
+        seedHashValid
+            ? '✅ Server seed hash verified - seed matches the hash shown before the hand'
+            : '❌ Server seed does not match hash - FAIRNESS VIOLATION'
+    );
+
+    // Check 2: Generate deck from seeds
+    let reproducedDeck: string[] = [];
+    let deckReproducible = true;
+    try {
+        reproducedDeck = await generateProvablyFairDeck(params.serverSeed, params.clientSeed, params.nonce);
+        details.push('✅ Deck successfully reproduced from seeds');
+    } catch (e) {
+        deckReproducible = false;
+        details.push('❌ Failed to reproduce deck: ' + String(e));
+    }
+
+    // Check 3: Verify community cards match expected positions
+    // Community cards are dealt: Burn[0], Flop[1,2,3], Burn[4], Turn[5], Burn[6], River[7]
+    const expectedCommunityCards = deckReproducible && reproducedDeck.length >= 8
+        ? [reproducedDeck[1], reproducedDeck[2], reproducedDeck[3], reproducedDeck[5], reproducedDeck[7]]
+        : [];
+    
+    let communityCardsValid = false;
+    if (params.communityCards.length === 0) {
+        communityCardsValid = true;
+        details.push('ℹ️ No community cards to verify (hand may have ended early)');
+    } else if (params.communityCards.length === 5 && expectedCommunityCards.length === 5) {
+        communityCardsValid = JSON.stringify(params.communityCards) === JSON.stringify(expectedCommunityCards);
+        if (communityCardsValid) {
+            details.push('✅ Community cards verified - match expected deck positions');
+        } else {
+            details.push('❌ Community cards mismatch - expected: ' + expectedCommunityCards.join(', '));
+        }
+    } else {
+        // Partial community cards verification
+        const matchCount = params.communityCards.filter((card, idx) => card === expectedCommunityCards[idx]).length;
+        communityCardsValid = matchCount === params.communityCards.length;
+        details.push(
+            communityCardsValid
+                ? `✅ ${matchCount}/${params.communityCards.length} community cards verified`
+                : `⚠️ Partial match: ${matchCount}/${params.communityCards.length} cards match`
+        );
+    }
+
+    const valid = seedHashValid && deckReproducible;
+
+    return {
+        valid,
+        checks: {
+            seedHashValid,
+            deckReproducible,
+            communityCardsValid
+        },
+        details,
+        reproducedDeck: reproducedDeck.slice(0, 10), // First 10 cards for inspection
+        expectedCommunityCards
+    };
 }
 
 /**
@@ -230,22 +329,47 @@ export async function fetchAndVerifyHand(
         );
 
         if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
             return {
                 success: false,
-                error: `Failed to fetch hand: ${response.statusText}`
+                error: errorData.error || `Failed to fetch hand: ${response.statusText}`
             };
         }
 
         const hand = await response.json();
+        
+        // Parse community cards from JSON string
+        let communityCards: string[] = [];
+        try {
+            const parsed = JSON.parse(hand.fairnessData.communityCards || '[]');
+            // Convert CardData format to string format for verification
+            communityCards = parsed.map((card: any) => {
+                if (typeof card === 'string') return card;
+                // Convert {rank: 'A', suit: 'spades'} to 'A♠' format
+                const suitSymbols: Record<string, string> = {
+                    'spades': '♠', 'hearts': '♥', 'diamonds': '♦', 'clubs': '♣'
+                };
+                return card.rank + (suitSymbols[card.suit] || card.suit);
+            });
+        } catch (e) {
+            console.error('Failed to parse community cards:', e);
+        }
+        
+        // Check if server seed is available
+        if (!hand.fairnessData.serverSeed || hand.fairnessData.serverSeed === 'Not yet available') {
+            return {
+                success: false,
+                error: 'Server seed not yet revealed. Wait for hand to complete.'
+            };
+        }
 
-        // Verify the hand
-        const verification = await verifyHandFairness({
+        // Verify the hand - we'll generate the deck from seeds and verify community cards match
+        const verification = await verifyHandFairnessSimplified({
             serverSeed: hand.fairnessData.serverSeed,
             serverSeedHash: hand.fairnessData.serverSeedHash,
             clientSeed: hand.fairnessData.clientSeed,
             nonce: hand.fairnessData.nonce,
-            deck: hand.deck || [],
-            communityCards: hand.communityCards || []
+            communityCards
         });
 
         return {

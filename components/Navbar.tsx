@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, User as UserIcon, LogOut, Trophy, PlusCircle, Grid, Layers, RefreshCw, Lock, Wallet, ArrowDownUp } from 'lucide-react';
+import { Menu, X, User as UserIcon, LogOut, Trophy, PlusCircle, Grid, RefreshCw, Lock, Wallet, ArrowDownUp } from 'lucide-react';
 import { Button } from './ui/Button';
 import { User } from '../types';
 import { getVipStatus, ADMIN_WALLET_ADDRESS } from '../constants';
@@ -20,7 +20,6 @@ export const Navbar: React.FC<NavbarProps> = ({ user, onOpenWalletModal, onOpenD
   const navLinks = [
     { name: 'Home', path: '/', icon: <PlusCircle size={18} /> },
     { name: 'Lobby', path: '/lobby', icon: <Grid size={18} /> },
-    { name: 'Staking', path: '/staking', icon: <Layers size={18} /> },
     { name: 'Swap', path: '/swap', icon: <RefreshCw size={18} /> },
     { name: 'Leaderboard', path: '/leaderboard', icon: <Trophy size={18} /> },
     { name: 'Fairness', path: '/fairness', icon: <Lock size={18} /> },

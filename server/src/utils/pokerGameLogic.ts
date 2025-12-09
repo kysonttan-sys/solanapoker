@@ -227,7 +227,18 @@ export class PokerEngine {
       }) as PlayerState[];
 
       const activePlayers = players.filter(p => p.status === 'active');
-      if (activePlayers.length < 2) return state;
+      if (activePlayers.length < 2) {
+          // Not enough players to start - reset to waiting state
+          return {
+              ...state,
+              phase: 'pre-flop',
+              winners: undefined,
+              currentTurnPlayerId: null,
+              communityCards: [],
+              pot: 0,
+              lastLog: 'Waiting for more players...'
+          };
+      }
 
       // Dealer & Blinds Logic
       let nextDealerIndex = (state.dealerIndex + 1) % players.length;
@@ -282,12 +293,14 @@ export class PokerEngine {
       players[sbIndex].balance -= sbAmt;
       players[sbIndex].bet = sbAmt;
       players[sbIndex].totalBet = sbAmt;
+      players[sbIndex].status = (players[sbIndex].balance === 0) ? 'all-in' : 'active';
       pot += sbAmt;
 
       const bbAmt = Math.min(state.bigBlind, players[bbIndex].balance);
       players[bbIndex].balance -= bbAmt;
       players[bbIndex].bet = bbAmt;
       players[bbIndex].totalBet = bbAmt;
+      players[bbIndex].status = (players[bbIndex].balance === 0) ? 'all-in' : 'active';
       pot += bbAmt;
 
       players[utgIndex].isTurn = true;
@@ -302,6 +315,7 @@ export class PokerEngine {
           dealerIndex: nextDealerIndex,
           minBet: state.bigBlind,
           lastRaiseAmount: state.bigBlind,
+          lastAggressorId: players[bbIndex].id, // BB is pre-flop aggressor
           deck,
           winners: undefined,
           lastHand,
@@ -397,6 +411,7 @@ export class PokerEngine {
               newPot += addedAmt;
               newMinBet = Math.max(newMinBet, player.bet + addedAmt);
               newLastRaiseAmount = newMinBet - previousMinBet;
+              state.lastAggressorId = player.id; // Track who raised last
               logMsg = `${player.name} raises to ${newMinBet}.`;
               break;
       }
@@ -433,8 +448,24 @@ export class PokerEngine {
       // Check if betting round is complete
       const allMatched = activePlayers.every(p => p.bet === newMinBet || p.status === 'all-in' || p.status === 'folded');
       const allActed = activePlayers.every(p => p.lastAction !== undefined || p.status === 'all-in');
+      
+      // In pre-flop, if there was a raise, action must return to last aggressor
+      // In post-flop, action must go back to first player after dealer
+      let actionComplete = allMatched && allActed;
+      
+      if (actionComplete && state.lastAggressorId) {
+          const aggressor = newPlayers.find(p => p.id === state.lastAggressorId);
+          // If aggressor is still active and can act, they must have acted since the last raise
+          if (aggressor && aggressor.status === 'active' && aggressor.balance > 0) {
+              // Check if action has returned to aggressor
+              const aggressorActedSinceRaise = aggressor.lastAction !== undefined;
+              if (!aggressorActedSinceRaise) {
+                  actionComplete = false;
+              }
+          }
+      }
 
-      if (allMatched && allActed) {
+      if (actionComplete) {
           // Round complete
           return {
               ...state,
@@ -529,6 +560,7 @@ export class PokerEngine {
           players,
           minBet: 0,
           lastRaiseAmount: 0,
+          lastAggressorId: undefined, // No pre-set aggressor post-flop
           currentTurnPlayerId: players[nextIndex].id,
           lastLog: msg
       };
@@ -546,6 +578,8 @@ export class PokerEngine {
       // Evaluate all hands
       activeCandidates.forEach(p => {
           p.handResult = evaluateHand([...p.cards, ...state.communityCards]);
+          // Reveal cards at showdown
+          p.cards = p.cards.map(c => ({ ...c, hidden: false }));
       });
 
       // Create side pots based on all-in amounts
@@ -564,9 +598,12 @@ export class PokerEngine {
           const potWinners = eligible.filter(p => p.handResult?.score === topScore);
           
           // Calculate rake (only for main pot in cash games)
+          // Note: VIP level should be passed from gameManager
           let rake = 0;
+          let rakeDistribution = null;
           if (index === 0 && state.gameMode === 'cash') {
-              rake = this.calculateRake(pot.amount, state);
+              rake = this.calculateRake(pot.amount, state, 0); // Default VIP level 0
+              // Rake distribution calculated in gameManager where we have user data
           }
           
           const netPot = pot.amount - rake;
@@ -655,7 +692,60 @@ export class PokerEngine {
       return pots;
   }
 
-  static calculateRake(potAmount: number, state: GameState): number {
+  static calculateRake(potAmount: number, state: GameState, vipLevel?: number): number {
+      if (state.gameMode !== 'cash') return 0; // No rake in tournaments/fun
+      if (potAmount <= 0) return 0;
+
+      // VIP Levels from constants.ts
+      const vipRakes = [0.05, 0.045, 0.04, 0.035, 0.03]; // Fish to Legend
+      const vipCaps = [5, 4.5, 4, 3.5, 3];
+      
+      const level = vipLevel || 0;
+      const rakePercent = vipRakes[level] || 0.05;
+      const rakeCap = vipCaps[level] || 5;
+      
+      const calculatedRake = potAmount * rakePercent;
+      return Math.min(calculatedRake, rakeCap);
+  }
+
+  static distributeRake(rake: number, hostTier: number = 0, referrerRank: number = 0): {
+      host: number;
+      referrer: number;
+      jackpot: number;
+      globalPool: number;
+      developer: number;
+  } {
+      if (rake <= 0) {
+          return { host: 0, referrer: 0, jackpot: 0, globalPool: 0, developer: 0 };
+      }
+
+      // Host share: 30-40% based on tier
+      const hostShares = [30, 32.5, 35, 37.5, 40]; // Dealer to Casino Mogul
+      const hostPercent = hostShares[hostTier] || 30;
+      const hostShare = (rake * hostPercent) / 100;
+
+      // Referrer share: 5-20% based on rank
+      const referrerShares = [5, 10, 15, 20]; // Scout to Partner
+      const referrerPercent = referrerShares[referrerRank] || 5;
+      const referrerShare = (rake * referrerPercent) / 100;
+
+      // Protocol allocations (% of total rake)
+      const jackpotShare = (rake * 5) / 100;      // 5% to Jackpot
+      const globalPoolShare = (rake * 5) / 100;   // 5% to Global Pool
+
+      // Developer gets remainder after host, referrer, jackpot, and global pool
+      const developerShare = rake - (hostShare + referrerShare + jackpotShare + globalPoolShare);
+
+      return {
+          host: Number(hostShare.toFixed(4)),
+          referrer: Number(referrerShare.toFixed(4)),
+          jackpot: Number(jackpotShare.toFixed(4)),
+          globalPool: Number(globalPoolShare.toFixed(4)),
+          developer: Number(developerShare.toFixed(4))
+      };
+  }
+
+  static calculateRake_OLD(potAmount: number, state: GameState): number {
       if (state.gameMode !== 'cash' || potAmount === 0) return 0;
       
       // VIP levels from constants (simplified - in production, fetch from user record)

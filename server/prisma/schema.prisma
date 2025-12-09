@@ -29,6 +29,7 @@ model User {
   username        String        @unique
   email           String?       @unique
   avatarUrl       String?
+  coverUrl        String?       // Profile cover image URL
   bio             String?
   balance         Float         @default(0)
   totalWinnings   Float         @default(0)
@@ -65,7 +66,7 @@ model Transaction {
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  type          String   // GAME_BUYIN, GAME_WIN, WITHDRAWAL, DEPOSIT, STAKING, RAKE, etc.
+  type          String   // GAME_BUYIN, GAME_WIN, WITHDRAWAL, DEPOSIT, RAKE, JACKPOT, etc.
   amount        Float
   status        String   @default("COMPLETED") // COMPLETED, PENDING, FAILED
   
@@ -118,5 +119,27 @@ model Hand {
   @@index([userId])
   @@index([tableId])
   @@index([handNumber])
+  @@index([createdAt])
+}
+
+// Rake Distribution Tracking
+model RakeDistribution {
+  id              String   @id @default(cuid())
+  handId          String
+  totalRake       Float
+  hostShare       Float
+  hostUserId      String?
+  hostTier        Int      @default(0)
+  referrerShare   Float
+  referrerUserId  String?
+  referrerRank    Int      @default(0)
+  jackpotShare    Float
+  globalPoolShare Float
+  developerShare  Float
+  createdAt       DateTime @default(now())
+
+  @@index([handId])
+  @@index([hostUserId])
+  @@index([referrerUserId])
   @@index([createdAt])
 }

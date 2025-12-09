@@ -7,7 +7,6 @@ import { Leaderboard } from './pages/Leaderboard';
 import { Profile } from './pages/Profile';
 import { Lobby } from './pages/Lobby';
 import { GameRoom } from './pages/GameRoom';
-import { Staking } from './pages/Staking';
 import { Swap } from './pages/Swap';
 import { Admin } from './pages/Admin';
 import { Documentation } from './pages/Documentation'; 
@@ -84,7 +83,14 @@ const AppContent: React.FC = () => {
                           username: userData.username,
                           balance: userData.balance, // Use database balance (reflects deposits)
                           isVerified: true,
-                          avatarUrl: userData.avatarUrl || `https://ui-avatars.com/api/?name=${address}`
+                          avatarUrl: userData.avatarUrl || `https://ui-avatars.com/api/?name=${address}`,
+                          preferences: {
+                              showWinRate: true,
+                              showPnL: true,
+                              incognito: false,
+                              hideBalance: false,
+                              allowFriendRequests: true
+                          }
                       };
                       console.log(`[User] Loaded from database - Balance: ${userData.balance} chips`);
                   } else {
@@ -95,7 +101,14 @@ const AppContent: React.FC = () => {
                           walletAddress: address,
                           username: `Player_${address.slice(0,4)}`,
                           balance: 0, // Start with 0 until they deposit
-                          isVerified: true
+                          isVerified: true,
+                          preferences: {
+                              showWinRate: true,
+                              showPnL: true,
+                              incognito: false,
+                              hideBalance: false,
+                              allowFriendRequests: true
+                          }
                       };
                       console.log(`[User] New user detected - Balance: 0 (deposit required)`);
                   }
@@ -108,7 +121,14 @@ const AppContent: React.FC = () => {
                       walletAddress: address,
                       username: `Player_${address.slice(0,4)}`,
                       balance: 0,
-                      isVerified: true
+                      isVerified: true,
+                      preferences: {
+                          showWinRate: true,
+                          showPnL: true,
+                          incognito: false,
+                          hideBalance: false,
+                          allowFriendRequests: true
+                      }
                   };
               }
               
@@ -277,7 +297,6 @@ const AppContent: React.FC = () => {
                     />
                 } 
             />
-            <Route path="/staking" element={<Staking user={user} onUserUpdate={handleUserUpdate} />} />
             <Route path="/swap" element={<Swap user={user} />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/fairness" element={<FairnessVerification />} />

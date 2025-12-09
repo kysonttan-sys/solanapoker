@@ -153,7 +153,40 @@ export const FairnessVerification: React.FC = () => {
                 {/* Search Mode */}
                 {mode === 'search' && (
                     <div className="bg-[#1a1f35] rounded-lg p-6 border border-cyan-500/20 mb-8">
-                        <h2 className="text-xl font-bold mb-4">Verify a Single Hand</h2>
+                        <div className="flex justify-between items-start mb-4">
+                            <h2 className="text-xl font-bold">Verify a Single Hand</h2>
+                            <Button
+                                onClick={async () => {
+                                    setLoading(true);
+                                    setError('');
+                                    try {
+                                        const response = await fetch(`${serverUrl}/api/fairness/test-hand`, {
+                                            method: 'POST'
+                                        });
+                                        const data = await response.json();
+                                        if (data.success) {
+                                            setTableId(data.testData.tableId);
+                                            setHandNumber(data.testData.handNumber.toString());
+                                            setResult({
+                                                type: 'test-created',
+                                                testData: data.testData,
+                                                instructions: data.instructions
+                                            });
+                                        } else {
+                                            setError(data.error || 'Failed to create test hand');
+                                        }
+                                    } catch (e) {
+                                        setError('Error: ' + String(e));
+                                    } finally {
+                                        setLoading(false);
+                                    }
+                                }}
+                                disabled={loading}
+                                className="bg-green-600 hover:bg-green-700 py-2 px-4 text-sm"
+                            >
+                                🧪 Create Test Hand
+                            </Button>
+                        </div>
 
                         <div className="grid grid-cols-2 gap-4 mb-4">
                             <div>
@@ -217,6 +250,26 @@ export const FairnessVerification: React.FC = () => {
                 {/* Verification Results */}
                 {result && (
                     <div className="bg-[#1a1f35] rounded-lg p-6 border border-cyan-500/20">
+                        {/* Test Hand Created */}
+                        {result.type === 'test-created' && (
+                            <div className="mb-6">
+                                <h3 className="text-xl font-bold mb-4 text-green-400">
+                                    🧪 Test Hand Created!
+                                </h3>
+                                <div className="bg-[#0f172a] rounded p-4 mb-4">
+                                    <h4 className="font-semibold mb-2">Test Data</h4>
+                                    <div className="space-y-1 text-sm font-mono">
+                                        <p>Table ID: <span className="text-cyan-400">{result.testData.tableId}</span></p>
+                                        <p>Hand Number: <span className="text-cyan-400">{result.testData.handNumber}</span></p>
+                                        <p>Server Hash: <span className="text-cyan-400">{result.testData.serverSeedHash.slice(0, 20)}...</span></p>
+                                    </div>
+                                </div>
+                                <p className="text-gray-400 mb-4">
+                                    Click "Verify Hand" above to verify this test hand. All checks should pass ✅
+                                </p>
+                            </div>
+                        )}
+                        
                         {result.type === 'single' && result.verification && (
                             <>
                                 <div className="mb-6">
@@ -240,7 +293,7 @@ export const FairnessVerification: React.FC = () => {
                                                 <p>
                                                     Server Seed Hash:{' '}
                                                     <span className="text-cyan-400">
-                                                        {result.hand.fairnessData.serverSeedHash.slice(0, 16)}...
+                                                        {result.hand.fairnessData?.serverSeedHash?.slice(0, 16) || 'N/A'}...
                                                     </span>
                                                 </p>
                                                 <p>
@@ -298,6 +351,34 @@ export const FairnessVerification: React.FC = () => {
                                             </div>
                                         </div>
 
+                                        {/* Verification Details */}
+                                        {result.verification.details && result.verification.details.length > 0 && (
+                                            <div className="bg-[#0f172a] rounded p-4">
+                                                <h4 className="font-semibold mb-2">Verification Log</h4>
+                                                <div className="space-y-1 text-sm">
+                                                    {result.verification.details.map((detail: string, idx: number) => (
+                                                        <p key={idx} className={detail.startsWith('✅') ? 'text-green-400' : detail.startsWith('❌') ? 'text-red-400' : 'text-gray-300'}>
+                                                            {detail}
+                                                        </p>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Reproduced Deck Sample */}
+                                        {result.verification.reproducedDeck && (
+                                            <div className="bg-[#0f172a] rounded p-4">
+                                                <h4 className="font-semibold mb-2">Reproduced Deck (First 10 cards)</h4>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {result.verification.reproducedDeck.map((card: string, idx: number) => (
+                                                        <span key={idx} className={`px-2 py-1 rounded text-sm font-mono ${card.includes('♥') || card.includes('♦') ? 'bg-red-900/50 text-red-300' : 'bg-gray-700 text-white'}`}>
+                                                            {card}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* Hand Details */}
                                         <div className="bg-[#0f172a] rounded p-4">
                                             <h4 className="font-semibold mb-2">Hand Details</h4>
@@ -305,7 +386,7 @@ export const FairnessVerification: React.FC = () => {
                                                 <p>
                                                     Winners:{' '}
                                                     <span className="text-cyan-400">
-                                                        {result.hand.winners.length} player(s)
+                                                        {result.hand.winners ? (typeof result.hand.winners === 'string' ? JSON.parse(result.hand.winners).length : result.hand.winners.length) : 0} player(s)
                                                     </span>
                                                 </p>
                                                 <p>
