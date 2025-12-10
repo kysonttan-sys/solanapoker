@@ -11,6 +11,7 @@ import { useConnection } from '../components/WalletContextProvider';
 import { getVaultAddress } from '../utils/solanaContract';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { useSocket } from '../hooks/useSocket';
+import { getApiUrl } from '../utils/api';
 
 interface AdminProps {
     user: User | null;
@@ -89,7 +90,7 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
     useEffect(() => {
         const fetchUsers = async () => {
             try {
-                const res = await fetch('http://localhost:4000/api/admin/users');
+                const res = await fetch(`${getApiUrl()}/api/admin/users`);
                 const users = await res.json();
                 setUsersList(users.map((u: any) => ({
                     id: u.id,
@@ -115,8 +116,8 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
         const fetchRevenueData = async () => {
             try {
                 const [revenueRes, jackpotRes] = await Promise.all([
-                    fetch('http://localhost:4000/api/admin/revenue'),
-                    fetch('http://localhost:4000/api/admin/jackpot')
+                    fetch(`${getApiUrl()}/api/admin/revenue`),
+                    fetch(`${getApiUrl()}/api/admin/jackpot`)
                 ]);
                 
                 if (revenueRes.ok) setRevenueData(await revenueRes.json());
@@ -136,7 +137,7 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
     useEffect(() => {
         const fetchTransactions = async () => {
             try {
-                const res = await fetch(`http://localhost:4000/api/admin/transactions?type=${txFilter}&limit=100`);
+                const res = await fetch(`${getApiUrl()}/api/admin/transactions?type=${txFilter}&limit=100`);
                 if (res.ok) {
                     const data = await res.json();
                     setTransactions(data.transactions || []);
@@ -155,12 +156,12 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const res = await fetch('http://localhost:4000/api/stats');
+                const res = await fetch(`${getApiUrl()}/api/stats`);
                 const stats = await res.json();
                 setActivePlayersOnline(stats.activePlayers || 0);
                 
                 // Fetch tables info
-                const tablesRes = await fetch('http://localhost:4000/api/tables');
+                const tablesRes = await fetch(`${getApiUrl()}/api/tables`);
                 const tables = await tablesRes.json();
                 setActiveTables(tables.length || 0);
                 setRealTables(tables);
@@ -213,7 +214,7 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
             if (result.success) {
                 alert(result.message);
                 // Refresh tables list
-                fetch('http://localhost:4000/api/tables')
+                fetch(`${getApiUrl()}/api/tables`)
                     .then(res => res.json())
                     .then(tables => {
                         setActiveTables(tables.length || 0);
@@ -592,7 +593,7 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
                                 <Button 
                                     onClick={() => {
                                         if (confirm('Are you sure you want to trigger manual jackpot distribution? This will distribute the current jackpot pool to eligible players.')) {
-                                            fetch('http://localhost:4000/api/admin/jackpot/trigger', {
+                                            fetch(`${getApiUrl()}/api/admin/jackpot/trigger`, {
                                                 method: 'POST',
                                                 headers: { 'Content-Type': 'application/json' },
                                                 body: JSON.stringify({ adminWallet: user?.walletAddress })
@@ -950,7 +951,7 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
                             variant="outline" 
                             className="shrink-0 gap-2"
                             onClick={() => {
-                                fetch('http://localhost:4000/api/admin/transactions?limit=100')
+                                fetch(`${getApiUrl()}/api/admin/transactions?limit=100`)
                                     .then(res => res.json())
                                     .then(data => setTransactions(data.transactions || []))
                                     .catch(err => console.error('Failed to refresh transactions:', err));

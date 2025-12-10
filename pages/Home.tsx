@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button';
 import { GameType, PokerTable, Tournament } from '../types';
 import { TableCard, TournamentCard } from '../components/GameCards';
 import { PRIZE_POOL_INFO } from '../constants';
+import { getApiUrl } from '../utils/api';
 
 interface HomeProps {
   onCreateGame: (type: GameType) => void;
@@ -74,7 +75,7 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables, to
   React.useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch('http://localhost:4000/api/stats');
+        const response = await fetch(`${getApiUrl()}/api/stats`);
         const data = await response.json();
         setPlatformStats([
           { label: 'Total Volume', value: `$${(data.totalVolume || 0).toLocaleString()}`, icon: <Coins size={18} className="text-yellow-500" />, sub: 'Lifetime Traded' },

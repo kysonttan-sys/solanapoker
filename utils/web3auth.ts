@@ -56,8 +56,6 @@ export const initWeb3Auth = async (): Promise<Web3Auth> => {
                 appUrl: typeof window !== 'undefined' ? window.location.origin : 'https://solpokerx.io',
                 theme: { primary: "#14F195" },
                 mode: "dark",
-                logoLight: "https://solpokerx.io/logo.png",
-                logoDark: "https://solpokerx.io/logo.png",
                 defaultLanguage: "en",
                 loginGridCol: 3,
                 primaryButton: "socialLogin",

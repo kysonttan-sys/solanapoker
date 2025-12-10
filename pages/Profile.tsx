@@ -8,6 +8,7 @@ import {
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
+import { getApiUrl } from '../utils/api';
 import { MOCK_USER, MOCK_STATS, LEADERBOARD_DATA, getVipStatus, REFERRAL_TIERS, getHostStatus, ADMIN_WALLET_ADDRESS } from '../constants';
 import { User } from '../types';
 import { Camera, Mail, AtSign, Wallet, Save, X, Image as ImageIcon, Lock, Trophy, TrendingUp, TrendingDown, Eye, Copy, Check, Users, Gift, Coins, Share2, DollarSign, PieChart as PieChartIcon, Crown, Network, Activity, Target, Clock, Settings, FileText, QrCode, Volume2, VolumeX, Palette, ArrowUpCircle, ArrowDownCircle, Ghost, EyeOff, Shield, UserPlus, MessageSquare, Trash2, Circle, Search, Send, ExternalLink, AlertTriangle, Loader2, Database, Terminal } from 'lucide-react';
@@ -241,7 +242,7 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
       
       setIsLoadingStats(true);
       try {
-        const res = await fetch(`http://localhost:4000/api/user/${targetUserId}/stats?timeframe=${timeRange}`);
+        const res = await fetch(`${getApiUrl()}/api/user/${targetUserId}/stats?timeframe=${timeRange}`);
         if (res.ok) {
           const data = await res.json();
           setUserStats(data.stats);
@@ -265,7 +266,7 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
       
       setIsLoadingHistory(true);
       try {
-        const res = await fetch(`http://localhost:4000/api/user/${targetUserId}/history?limit=20`);
+        const res = await fetch(`${getApiUrl()}/api/user/${targetUserId}/history?limit=20`);
         if (res.ok) {
           const data = await res.json();
           setWalletHistory(data.walletTransactions || []);
@@ -512,7 +513,7 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
     setIsSavingProfile(true);
     try {
         // Save to database
-        const res = await fetch(`http://localhost:4000/api/user/${profileForm.id}/profile`, {
+        const res = await fetch(`${getApiUrl()}/api/user/${profileForm.id}/profile`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

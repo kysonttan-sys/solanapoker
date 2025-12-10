@@ -28,7 +28,7 @@ import { WalletContextProvider, useWallet, useConnection } from './components/Wa
 import { MOCK_USER, MOCK_TABLES, MOCK_TOURNAMENTS, ADMIN_WALLET_ADDRESS } from './constants';
 import { User, GameType, PokerTable, Tournament } from './types';
 import { Twitter, Facebook, Instagram, Music, Send, Radio } from 'lucide-react';
-import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { getApiUrl } from './utils/api';
 
 const AppContent: React.FC = () => {
   const navigate = useNavigate();
@@ -73,7 +73,7 @@ const AppContent: React.FC = () => {
               // Fetch user data from backend database
               let currentUser: User;
               try {
-                  const response = await fetch(`http://localhost:4000/api/user/${address}`);
+                  const response = await fetch(`${getApiUrl()}/api/user/${address}`);
                   if (response.ok) {
                       const userData = await response.json();
                       currentUser = {
@@ -157,7 +157,7 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     const fetchTables = async () => {
       try {
-        const response = await fetch('http://localhost:4000/api/tables');
+        const response = await fetch(`${getApiUrl()}/api/tables`);
         if (response.ok) {
           const data = await response.json();
           setTables(data);
@@ -180,7 +180,7 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     const fetchTournaments = async () => {
       try {
-        const response = await fetch('http://localhost:4000/api/tournaments');
+        const response = await fetch(`${getApiUrl()}/api/tournaments`);
         if (response.ok) {
           const data = await response.json();
           setTournaments(data);
@@ -230,7 +230,7 @@ const AppContent: React.FC = () => {
     setCreateGameType(type);
     setCreateModalOpen(true);
   };
-
+``
   const handleJoinGame = (gameId: string) => {
       // Issue #7: Enforce cookie consent before actions
       if (cookieConsent !== true) {

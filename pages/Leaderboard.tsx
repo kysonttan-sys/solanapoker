@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Crown, Sparkles, TrendingUp } from 'lucide-react';
+import { getApiUrl } from '../utils/api';
 
 export const Leaderboard: React.FC = () => {
   const navigate = useNavigate();
@@ -14,7 +15,7 @@ export const Leaderboard: React.FC = () => {
   useEffect(() => {
     const fetchLeaderboard = async () => {
         try {
-            const res = await fetch(`http://localhost:4000/api/leaderboard?type=${filterType}&timeframe=${timeframe}`);
+            const res = await fetch(`${getApiUrl()}/api/leaderboard?type=${filterType}&timeframe=${timeframe}`);
             const json = await res.json();
             // Map API response to UI format
             const formatted = json.map((u: any, i: number) => ({

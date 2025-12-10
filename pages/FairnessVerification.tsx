@@ -6,6 +6,7 @@ import {
     verifyHandBatch,
     exportVerificationProof
 } from '../utils/fairnessVerificationClient';
+import { getApiUrl } from '../utils/api';
 
 export const FairnessVerification: React.FC = () => {
     const [mode, setMode] = useState<'search' | 'history' | 'batch'>('search');
@@ -16,7 +17,7 @@ export const FairnessVerification: React.FC = () => {
     const [error, setError] = useState('');
     const [playerStats, setPlayerStats] = useState<any>(null);
 
-    const serverUrl = process.env.REACT_APP_SERVER_URL || 'http://localhost:4000';
+    const serverUrl = getApiUrl();
 
     const handleVerifySingleHand = async () => {
         if (!tableId.trim() || !handNumber.trim()) {

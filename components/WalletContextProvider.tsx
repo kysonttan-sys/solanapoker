@@ -24,6 +24,7 @@ import {
     signMessage as web3authSignMessage,
     Web3AuthUser
 } from '../utils/web3auth';
+import { getApiUrl } from '../utils/api';
 
 // Reown Project ID
 const projectId = 'ce6420e60d19c071df9631a96e4f46e4';
@@ -188,8 +189,7 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
                 
                 // Register/update user in database
                 try {
-                    const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:4000';
-                    await fetch(`${serverUrl}/api/user/social-login`, {
+                    await fetch(`${getApiUrl()}/api/user/social-login`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
