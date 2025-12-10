@@ -26,8 +26,8 @@ import {
 } from '../utils/web3auth';
 import { getApiUrl } from '../utils/api';
 
-// Reown Project ID
-const projectId = 'ce6420e60d19c071df9631a96e4f46e4';
+// Reown Project ID - from environment variable or fallback
+const projectId = import.meta.env.VITE_REOWN_PROJECT_ID || 'ce6420e60d19c071df9631a96e4f46e4';
 
 // Metadata for the app
 const metadata = {
