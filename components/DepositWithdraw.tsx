@@ -4,6 +4,7 @@ import { useSocket } from '../hooks/useSocket';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
 import { ArrowDownUp, Loader, CheckCircle, AlertCircle, CreditCard, Building2, Wallet } from 'lucide-react';
+import { getApiUrl } from '../utils/api';
 
 interface TransactionStatus {
     status: 'idle' | 'processing' | 'confirming' | 'success' | 'error';
@@ -61,7 +62,7 @@ export const DepositWithdraw: React.FC<{
         const fetchBalances = async () => {
             try {
                 // Fetch in-game balance from backend API
-                const response = await fetch(`http://localhost:4000/api/user/${publicKey.toString()}`);
+                const response = await fetch(`${getApiUrl()}/api/user/${publicKey.toString()}`);
                 if (response.ok) {
                     const userData = await response.json();
                     setBalance(userData.balance);
