@@ -20,20 +20,20 @@ const suitIcons: Record<Suit, string> = {
 };
 
 export const Card: React.FC<CardProps> = ({ suit, rank, hidden = false, className = '', size = 'md', highlight = false, fourColor = false }) => {
-  // Optimized sizes for better mobile card visibility
+  // Cleaner, more consistent sizing
   const sizeClasses = {
-    sm: 'w-7 h-10 xs:w-8 xs:h-11 sm:w-9 sm:h-13 md:w-10 md:h-14 text-[8px] xs:text-[9px] sm:text-[10px] md:text-xs',
-    md: 'w-8 h-11 xs:w-9 xs:h-13 sm:w-11 sm:h-16 md:w-14 md:h-20 text-[9px] xs:text-[10px] sm:text-xs md:text-base',
-    lg: 'w-11 h-16 xs:w-13 xs:h-18 sm:w-16 sm:h-23 md:w-20 md:h-28 text-sm xs:text-base sm:text-lg md:text-xl',
+    sm: 'w-9 h-13 sm:w-11 sm:h-16 text-[10px] sm:text-xs',
+    md: 'w-11 h-16 sm:w-14 sm:h-20 text-xs sm:text-sm',
+    lg: 'w-14 h-20 sm:w-18 sm:h-26 text-sm sm:text-lg',
   };
 
-  const highlightClass = highlight ? 'ring-2 xs:ring-3 sm:ring-4 ring-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.6)] xs:shadow-[0_0_15px_rgba(250,204,21,0.8)] z-50 border-yellow-300' : '';
+  const highlightClass = highlight ? 'ring-2 sm:ring-3 ring-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.7)] z-50 border-yellow-300' : '';
 
   const getSuitColor = (s: Suit) => {
       if (s === 'spades') return 'text-gray-900';
-      if (s === 'hearts') return 'text-red-500';
-      if (s === 'clubs') return 'text-green-600';
-      if (s === 'diamonds') return fourColor ? 'text-blue-500' : 'text-red-500';
+      if (s === 'hearts') return 'text-red-600';
+      if (s === 'clubs') return fourColor ? 'text-green-700' : 'text-gray-900';
+      if (s === 'diamonds') return fourColor ? 'text-blue-600' : 'text-red-600';
       return 'text-gray-900';
   };
 
@@ -42,20 +42,20 @@ export const Card: React.FC<CardProps> = ({ suit, rank, hidden = false, classNam
   if (hidden) {
     return (
       <div 
-        className={`bg-sol-blue/80 border-2 border-white/20 rounded-md shadow-md flex items-center justify-center ${sizeClasses[size]} ${className}`}
-        style={{ 
-            backgroundImage: 'repeating-linear-gradient(45deg, #1D8BFF 0, #1D8BFF 2px, #13131F 2px, #13131F 4px)' 
-        }}
+        className={`bg-gradient-to-br from-blue-600 to-blue-800 border-2 border-white/30 rounded-lg shadow-md flex items-center justify-center ${sizeClasses[size]} ${className}`}
       >
-        <div className="w-3 h-3 xs:w-3.5 xs:h-3.5 sm:w-4 sm:h-4 rounded-full bg-sol-green/20" />
+        <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
+          <span className="text-white/60 text-lg sm:text-xl font-bold">?</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={`bg-gray-100 rounded-md shadow-lg flex flex-col items-center p-0.5 xs:p-0.5 sm:p-0.5 md:p-1 select-none transform transition-transform ${sizeClasses[size]} ${highlightClass} ${className} ${!highlight && 'hover:-translate-y-1'} border border-gray-200`}>
+    <div className={`bg-white rounded-lg shadow-lg flex flex-col items-center justify-between p-1 sm:p-1.5 select-none ${sizeClasses[size]} ${highlightClass} ${className} border border-gray-200`}>
       <div className={`self-start font-bold leading-none ${colorClass}`}>{rank}</div>
-      <div className={`flex-1 flex items-center justify-center ${colorClass} text-base xs:text-lg sm:text-xl md:text-2xl`}>{suitIcons[suit]}</div>
+      <div className={`${colorClass} text-xl sm:text-2xl`}>{suitIcons[suit]}</div>
+      <div className={`self-end font-bold leading-none rotate-180 ${colorClass}`}>{rank}</div>
     </div>
   );
 };

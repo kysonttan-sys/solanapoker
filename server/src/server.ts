@@ -1,6 +1,7 @@
 
 import express from 'express';
 import http from 'http';
+import path from 'path';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { GameManager } from './gameManager';
@@ -20,7 +21,12 @@ process.on('unhandledRejection', (reason, promise) => {
 
 const app = express();
 app.use(cors() as any);
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Increase limit for image uploads
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// Serve static files from the built frontend
+const distPath = path.join(__dirname, '../../dist');
+app.use(express.static(distPath));
 
 const server = http.createServer(app);
 
@@ -38,13 +44,31 @@ const gameManager = new GameManager(io);
 // 1. Live Protocol Stats & Community Pool
 app.get('/api/stats', async (req, res) => {
     try {
-        const stats = await db.systemState.findUnique({ where: { id: 'global' } });
-        res.json(stats || {
-            jackpot: 14520.50,
-            tvl: 12500000,
-            activePlayers: 0
+        // Ensure the record exists with upsert
+        const stats = await db.systemState.upsert({
+            where: { id: 'global' },
+            create: {
+                id: 'global',
+                jackpot: 0,
+                tvl: 0,
+                totalVolume: 0,
+                totalHands: 0,
+                activePlayers: 0,
+                communityPool: 0
+            },
+            update: {} // No update needed, just ensure it exists
+        });
+        
+        res.json({
+            jackpot: stats.jackpot || 0,
+            tvl: stats.tvl || 0,
+            totalVolume: stats.totalVolume || 0,
+            totalHands: stats.totalHands || 0,
+            activePlayers: stats.activePlayers || 0,
+            communityPool: stats.communityPool || 0
         });
     } catch (e) {
+        console.error('[API] /api/stats error:', e);
         res.status(500).json({ error: 'Failed to fetch stats' });
     }
 });
@@ -574,7 +598,6 @@ app.put('/api/user/:id/profile', async (req, res) => {
         }
 
         // Update user profile
-        // @ts-ignore - coverUrl added to schema, run prisma generate
         const updatedUser = await db.user.update({
             where: { id: userId },
             data: {
@@ -594,7 +617,6 @@ app.put('/api/user/:id/profile', async (req, res) => {
             email: updatedUser.email,
             bio: updatedUser.bio,
             avatarUrl: updatedUser.avatarUrl,
-            // @ts-ignore - coverUrl added to schema
             coverUrl: updatedUser.coverUrl,
             balance: updatedUser.balance,
             totalWinnings: updatedUser.totalWinnings,
@@ -611,6 +633,69 @@ app.put('/api/user/:id/profile', async (req, res) => {
     } catch (e) {
         console.error('Profile update error:', e);
         res.status(500).json({ error: 'Failed to update profile' });
+    }
+});
+
+// 3e. Social Login - Create or Update User with Email Binding
+app.post('/api/user/social-login', async (req, res) => {
+    try {
+        const { walletAddress, email, username, avatarUrl, loginType } = req.body;
+
+        if (!walletAddress) {
+            return res.status(400).json({ error: 'Wallet address required' });
+        }
+
+        // Check if user with this wallet already exists
+        let user = await db.user.findUnique({ where: { id: walletAddress } });
+
+        if (user) {
+            // Update existing user with social login info
+            user = await db.user.update({
+                where: { id: walletAddress },
+                data: {
+                    ...(email && !user.email && { email }), // Only set email if not already set
+                    ...(avatarUrl && !user.avatarUrl && { avatarUrl }), // Only set avatar if not already set
+                }
+            });
+            console.log(`[Social Login] Updated existing user ${walletAddress} with ${loginType}`);
+        } else {
+            // Create new user from social login
+            const defaultUsername = username || email?.split('@')[0] || `Player_${walletAddress.slice(0, 6)}`;
+            
+            // Check if username is taken and make it unique
+            let finalUsername = defaultUsername;
+            let counter = 1;
+            while (await db.user.findUnique({ where: { username: finalUsername } })) {
+                finalUsername = `${defaultUsername}${counter}`;
+                counter++;
+            }
+
+            user = await db.user.create({
+                data: {
+                    id: walletAddress,
+                    walletAddress,
+                    username: finalUsername,
+                    email: email || null,
+                    avatarUrl: avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalUsername)}&background=14F195&color=000`,
+                    balance: 0, // Start with 0 SOL
+                }
+            });
+            console.log(`[Social Login] Created new user ${walletAddress} via ${loginType}: ${finalUsername}`);
+        }
+
+        res.json({
+            id: user.id,
+            walletAddress: user.walletAddress,
+            username: user.username,
+            email: user.email,
+            avatarUrl: user.avatarUrl,
+            balance: user.balance,
+            loginType: loginType || 'social',
+            isNewUser: !user.totalHands || user.totalHands === 0
+        });
+    } catch (e) {
+        console.error('Social login error:', e);
+        res.status(500).json({ error: 'Failed to process social login' });
     }
 });
 
@@ -913,6 +998,15 @@ app.get('/api/proof/:tableId/hands', async (req, res) => {
     } catch (e) {
         return res.status(500).json({ error: 'Failed to fetch hands' });
     }
+});
+
+// SPA catch-all: Serve index.html for any non-API route
+app.get('*', (req, res) => {
+    // Don't serve index.html for API routes or socket.io
+    if (req.path.startsWith('/api/') || req.path.startsWith('/socket.io/')) {
+        return res.status(404).json({ error: 'Not found' });
+    }
+    res.sendFile(path.join(__dirname, '../../dist/index.html'));
 });
 
 // --- Socket.io Events ---

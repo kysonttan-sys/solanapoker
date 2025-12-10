@@ -3,14 +3,27 @@ import { io, Socket } from 'socket.io-client';
 
 // Detect server URL dynamically
 const getServerUrl = () => {
+  // Check for environment variable first (for team testing with ngrok)
+  if (import.meta.env.VITE_API_URL) {
+    console.log('[Socket.io] Using VITE_API_URL:', import.meta.env.VITE_API_URL);
+    return import.meta.env.VITE_API_URL;
+  }
+  
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
     const hostname = window.location.hostname;
     
-    // Use port 4000 for backend (development)
-    const backendPort = '4000';
-    const url = `${protocol}//${hostname}:${backendPort}`;
-    console.log('[Socket.io] Connecting to:', url);
+    // If accessing from ngrok or external, use same origin
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      // For production/ngrok: backend should be on same domain or specified separately
+      const url = `${protocol}//${hostname}:4000`;
+      console.log('[Socket.io] External access, connecting to:', url);
+      return url;
+    }
+    
+    // Local development
+    const url = `http://localhost:4000`;
+    console.log('[Socket.io] Local dev, connecting to:', url);
     return url;
   }
   return 'http://localhost:4000';

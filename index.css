@@ -1,0 +1,226 @@
+/* SOLPOKER X - AppKit Theme Overrides */
+
+/* Custom CSS Properties for Reown AppKit */
+:root {
+  /* SOLPOKER X Theme Colors */
+  --sol-green: #14F195;
+  --sol-blue: #1D8BFF;
+  --sol-purple: #8A42FF;
+  --sol-black: #0B0B0F;
+  --sol-dark: #13131F;
+  --sol-gray: #1F1F2E;
+
+  /* AppKit Overrides - Updated property names */
+  --w3m-accent: #14F195 !important;
+  --w3m-color-mix: #14F195 !important;
+  --w3m-color-mix-strength: 15 !important;
+  --w3m-border-radius-master: 12px !important;
+  --w3m-font-family: 'Inter', system-ui, sans-serif !important;
+
+  /* Additional AppKit theming */
+  --wui-color-accent-100: #14F195 !important;
+  --wui-color-accent-090: #12d985 !important;
+  --wui-color-accent-080: #10c177 !important;
+  --wui-color-fg-100: #ffffff !important;
+  --wui-color-fg-200: #e0e0e0 !important;
+  --wui-color-fg-300: #9a9a9a !important;
+  --wui-color-bg-100: #0B0B0F !important;
+  --wui-color-bg-200: #13131F !important;
+  --wui-color-bg-300: #1F1F2E !important;
+}
+
+/* AppKit Modal Background Override */
+w3m-modal,
+wui-flex,
+wui-card {
+  --wui-color-bg-100: #0B0B0F !important;
+  --wui-color-bg-125: #0f0f14 !important;
+  --wui-color-bg-150: #13131F !important;
+  --wui-color-bg-175: #181824 !important;
+  --wui-color-bg-200: #1F1F2E !important;
+  --wui-color-bg-225: #252538 !important;
+  --wui-color-bg-250: #2a2a40 !important;
+  --wui-color-bg-275: #303048 !important;
+  --wui-color-bg-300: #353550 !important;
+}
+
+/* Override modal backdrop */
+w3m-modal::part(backdrop) {
+  background-color: rgba(0, 0, 0, 0.85) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+/* Override modal container */
+w3m-modal::part(container) {
+  background-color: #0B0B0F !important;
+  border: 1px solid rgba(20, 241, 149, 0.2) !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 30px rgba(20, 241, 149, 0.1) !important;
+}
+
+/* Button accent colors */
+wui-button[variant="accent"],
+wui-button[variant="accentS"],
+wui-button[variant="accentSm"] {
+  background-color: #14F195 !important;
+  color: #0B0B0F !important;
+}
+
+wui-button[variant="accent"]:hover {
+  background-color: #12d985 !important;
+}
+
+/* Connect button styling */
+wui-connect-button button,
+wui-account-button button {
+  background: linear-gradient(135deg, #14F195 0%, #1D8BFF 100%) !important;
+  color: #0B0B0F !important;
+  font-weight: 600 !important;
+}
+
+/* Wallet list items */
+wui-list-wallet {
+  background-color: #13131F !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-radius: 12px !important;
+}
+
+wui-list-wallet:hover {
+  background-color: #1F1F2E !important;
+  border-color: rgba(20, 241, 149, 0.3) !important;
+}
+
+/* Social login buttons */
+wui-list-social {
+  background-color: #13131F !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+wui-list-social:hover {
+  border-color: rgba(20, 241, 149, 0.3) !important;
+}
+
+/* Input fields */
+wui-input-text input,
+wui-email-input input {
+  background-color: #13131F !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+wui-input-text input:focus,
+wui-email-input input:focus {
+  border-color: #14F195 !important;
+  box-shadow: 0 0 0 2px rgba(20, 241, 149, 0.2) !important;
+}
+
+/* Network indicator */
+wui-network-button {
+  background-color: #13131F !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Tags and badges */
+wui-tag {
+  background-color: rgba(20, 241, 149, 0.1) !important;
+  color: #14F195 !important;
+}
+
+/* Scrollbar styling */
+w3m-modal ::-webkit-scrollbar {
+  width: 6px;
+}
+
+w3m-modal ::-webkit-scrollbar-track {
+  background: #13131F;
+  border-radius: 3px;
+}
+
+w3m-modal ::-webkit-scrollbar-thumb {
+  background: #14F195;
+  border-radius: 3px;
+}
+
+w3m-modal ::-webkit-scrollbar-thumb:hover {
+  background: #12d985;
+}
+
+/* Loading spinner */
+wui-loading-spinner {
+  color: #14F195 !important;
+}
+
+/* Links */
+wui-link {
+  color: #14F195 !important;
+}
+
+wui-link:hover {
+  color: #12d985 !important;
+}
+
+/* QR Code container */
+wui-qr-code {
+  background-color: #ffffff !important;
+  border-radius: 16px !important;
+  padding: 16px !important;
+}
+
+/* Card containers */
+wui-card {
+  background-color: #13131F !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-radius: 16px !important;
+}
+
+/* Separator lines */
+wui-separator {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Icon colors */
+wui-icon {
+  color: #14F195 !important;
+}
+
+/* All Wallets view */
+wui-all-wallets-list wui-card-select {
+  background-color: #13131F !important;
+}
+
+wui-all-wallets-list wui-card-select:hover {
+  background-color: #1F1F2E !important;
+  border-color: rgba(20, 241, 149, 0.3) !important;
+}
+
+/* Tab buttons */
+wui-tabs button {
+  color: #9a9a9a !important;
+}
+
+wui-tabs button[data-active="true"] {
+  color: #14F195 !important;
+  border-bottom-color: #14F195 !important;
+}
+
+/* Chip/pill components */
+wui-chip {
+  background-color: rgba(20, 241, 149, 0.1) !important;
+  color: #14F195 !important;
+  border: 1px solid rgba(20, 241, 149, 0.2) !important;
+}
+
+/* Success states */
+wui-icon[color="success"] {
+  color: #14F195 !important;
+}
+
+/* Error states */
+wui-icon[color="error"] {
+  color: #ef4444 !important;
+}
+
+/* Toast notifications */
+wui-snackbar {
+  background-color: #13131F !important;
+  border: 1px solid rgba(20, 241, 149, 0.2) !important;
+}

@@ -140,7 +140,7 @@ export const createLeaveTableInstruction = async (
 
 export const depositToVault = async (
     connection: Connection,
-    sendTransaction: any,
+    sendTransaction: (transaction: Transaction) => Promise<string>,
     publicKey: PublicKey,
     amount: number
 ) => {
@@ -149,32 +149,11 @@ export const depositToVault = async (
     try {
         const instruction = await createBuyInInstruction(publicKey, amount);
         const transaction = new Transaction().add(instruction);
-        
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = publicKey;
 
-        // Use sendTransaction from useWallet hook
-        const signature = await sendTransaction(transaction, connection, {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed',
-        });
-        
+        // Use sendTransaction from WalletContextProvider (handles blockhash, signing, confirmation internally)
+        const signature = await sendTransaction(transaction);
+
         console.log(`[Chain] Deposit TX Sent: ${signature}`);
-        
-        // Wait for confirmation with timeout
-        const confirmationStrategy = {
-            signature,
-            blockhash,
-            lastValidBlockHeight
-        };
-        
-        const confirmation = await connection.confirmTransaction(confirmationStrategy, 'confirmed');
-
-        if (confirmation.value.err) {
-            console.error("Deposit Confirmation Error:", confirmation.value.err);
-            throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
-        }
         return signature;
     } catch (e: any) {
         // Pass the error message back cleanly
@@ -189,7 +168,7 @@ export const depositToVault = async (
 
 export const withdrawFromVault = async (
     connection: Connection,
-    sendTransaction: any,
+    sendTransaction: (transaction: Transaction) => Promise<string>,
     publicKey: PublicKey,
     amount: number
 ) => {
@@ -198,32 +177,11 @@ export const withdrawFromVault = async (
     try {
         const instruction = await createLeaveTableInstruction(publicKey, amount);
         const transaction = new Transaction().add(instruction);
-        
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = publicKey;
 
-        // Use sendTransaction from useWallet hook
-        const signature = await sendTransaction(transaction, connection, {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed',
-        });
-        
+        // Use sendTransaction from WalletContextProvider (handles blockhash, signing, confirmation internally)
+        const signature = await sendTransaction(transaction);
+
         console.log(`[Chain] Withdraw TX Sent: ${signature}`);
-        
-        // Wait for confirmation with timeout
-        const confirmationStrategy = {
-            signature,
-            blockhash,
-            lastValidBlockHeight
-        };
-        
-        const confirmation = await connection.confirmTransaction(confirmationStrategy, 'confirmed');
-
-        if (confirmation.value.err) {
-            console.error("Withdraw Confirmation Error:", confirmation.value.err);
-            throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
-        }
         return signature;
     } catch (e: any) {
         console.error("Withdraw Error Details:", e);
@@ -234,7 +192,7 @@ export const withdrawFromVault = async (
 /// Initialize the vault (admin only, one-time setup)
 export const initializeVault = async (
     connection: Connection,
-    sendTransaction: any,
+    sendTransaction: (transaction: Transaction) => Promise<string>,
     adminPublicKey: PublicKey
 ) => {
     if (!adminPublicKey) throw new Error("Wallet not connected");
@@ -266,31 +224,11 @@ export const initializeVault = async (
         });
 
         const transaction = new Transaction().add(instruction);
-        
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = adminPublicKey;
 
-        const signature = await sendTransaction(transaction, connection, {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed',
-        });
-        
+        // Use sendTransaction from WalletContextProvider (handles blockhash, signing, confirmation internally)
+        const signature = await sendTransaction(transaction);
+
         console.log(`[Chain] Initialize Vault TX Sent: ${signature}`);
-        
-        const confirmationStrategy = {
-            signature,
-            blockhash,
-            lastValidBlockHeight
-        };
-        
-        const confirmation = await connection.confirmTransaction(confirmationStrategy, 'confirmed');
-
-        if (confirmation.value.err) {
-            console.error("Initialize Confirmation Error:", confirmation.value.err);
-            throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
-        }
-        
         console.log("✅ Vault initialized successfully!");
         return signature;
     } catch (e: any) {

@@ -7,7 +7,7 @@ import { Lock, Save, Activity, DollarSign, Users, PauseCircle, PlayCircle, Setti
 import { ADMIN_WALLET_ADDRESS, LEADERBOARD_DATA, MOCK_TABLES, PROTOCOL_FEE_SPLIT, MOCK_USER, REFERRAL_TIERS, HOST_TIERS } from '../constants';
 import { User } from '../types';
 import { Navigate } from 'react-router-dom';
-import { useConnection } from '@solana/wallet-adapter-react';
+import { useConnection } from '../components/WalletContextProvider';
 import { getVaultAddress } from '../utils/solanaContract';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { useSocket } from '../hooks/useSocket';

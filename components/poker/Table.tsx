@@ -131,73 +131,42 @@ export const Table: React.FC<TableProps> = ({ gameState, heroId, timeLeft, total
 
   return (
     <div 
-        className={`relative mx-auto select-none transition-all duration-300 ${
+        className={`relative mx-auto select-none ${
             isVertical 
-            ? 'w-[98%] max-w-[420px] sm:max-w-[500px] md:max-w-[650px] md:w-[85%] h-[65vh] xs:h-[68vh] sm:h-[72vh] md:h-[75vh] mt-[5vh] xs:mt-[8vh] sm:mt-[10vh]' 
-            : `w-full max-w-[1000px] aspect-[16/9] origin-top mt-[3vh]`
+            ? 'w-[95%] max-w-[450px] h-[60vh] min-h-[400px] max-h-[600px]' 
+            : 'w-[95%] max-w-[900px] aspect-[16/10]'
         }`}
-        style={!isVertical ? { transform: `scale(${scale})` } : { transform: `scale(${scale})` }}
+        style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}
     >
-      {/* Fairness Verification */}
-      {gameState?.phase === 'showdown' && (
-        <div className="absolute top-2 right-2 bg-black/60 border border-white/10 rounded-lg px-3 py-2 flex items-center gap-2">
-          <span className="text-xs text-gray-300">Hand #{gameState?.handNumber} complete</span>
-          <button
-            className="text-xs px-2 py-1 rounded bg-sol-green/20 text-sol-green border border-sol-green/40 hover:bg-sol-green/30"
-            onClick={() => onVerify?.(gameState?.tableId, gameState?.handNumber)}
-            title="Verify this hand's provable fairness"
-          >
-            Verify Hand
-          </button>
-        </div>
-      )}
-      
-      {/* Rake & VIP Info at Showdown */}
-      {gameState?.phase === 'showdown' && gameState?.winners && (
-        <div className="absolute top-16 right-2 bg-black/80 border border-white/10 rounded-lg px-3 py-2 text-[10px] space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400">Rake:</span>
-            <span className="text-sol-purple font-mono">~3-5%</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400">VIP Tier:</span>
-            <span className="text-sol-green font-bold">Fish 🐟</span>
-          </div>
-        </div>
-      )}
-      <div className={`absolute inset-0 bg-[#1a4731] shadow-[inset_0_0_50px_rgba(0,0,0,0.8)] border-[12px] border-[#2c2e3a] ${
-          isVertical ? 'rounded-[160px] md:rounded-[240px]' : 'rounded-[200px]'
+      {/* Table felt */}
+      <div className={`absolute inset-0 bg-gradient-to-br from-[#1a5438] via-[#1a4731] to-[#143d2a] shadow-[inset_0_0_60px_rgba(0,0,0,0.7)] border-[8px] sm:border-[10px] md:border-[12px] border-[#3a3d4a] ${
+          isVertical ? 'rounded-[120px] sm:rounded-[150px]' : 'rounded-[140px] sm:rounded-[180px]'
       }`}>
-         <div className={`absolute inset-4 md:inset-8 border-2 border-white/5 opacity-50 ${
-             isVertical ? 'rounded-[140px] md:rounded-[220px]' : 'rounded-[160px]'
+         <div className={`absolute inset-3 sm:inset-5 md:inset-8 border border-white/10 ${
+             isVertical ? 'rounded-[100px] sm:rounded-[130px]' : 'rounded-[120px] sm:rounded-[160px]'
          }`}></div>
          
-         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-10 pointer-events-none text-center">
-            <span className={`block font-bold tracking-widest text-white whitespace-nowrap ${isVertical ? 'text-3xl rotate-90' : 'text-4xl'}`}>
-                SOLPOKER<span className="whitespace-nowrap"> X</span>
+         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.08] pointer-events-none text-center">
+            <span className={`block font-bold tracking-[0.2em] text-white whitespace-nowrap ${isVertical ? 'text-2xl sm:text-3xl' : 'text-3xl sm:text-4xl'}`}>
+                SOLPOKER X
             </span>
-            {maxSeats > 6 && (
-                <span className={`block mt-2 font-mono font-bold text-sol-green ${isVertical ? 'text-xs rotate-90' : 'text-sm'}`}>
-                    9-MAX PRO
-                </span>
-            )}
          </div>
       </div>
 
-      <div className={`absolute left-1/2 -translate-x-1/2 flex z-10 ${
+      <div className={`absolute left-1/2 -translate-x-1/2 flex z-20 ${
           isVertical 
-            ? 'top-[42%] flex-wrap justify-center max-w-[160px] xs:max-w-[200px] sm:max-w-[260px] gap-1 xs:gap-1.5 sm:gap-2' 
-            : 'top-1/2 -translate-y-1/2 gap-2 md:gap-3'
+            ? 'top-[38%] -translate-y-1/2 flex-wrap justify-center max-w-[200px] sm:max-w-[280px] gap-1 sm:gap-2' 
+            : 'top-[45%] -translate-y-1/2 gap-2 sm:gap-3'
       }`}>
          {communityCards.length === 0 ? (
-             <div className={`flex opacity-20 ${
-               isVertical ? 'gap-1 xs:gap-1.5 sm:gap-2' : 'gap-2'
+             <div className={`flex opacity-15 ${
+               isVertical ? 'gap-1 sm:gap-2' : 'gap-2 sm:gap-3'
              }`}>
                  {[1,2,3,4,5].map(i => (
-                     <div key={i} className={`rounded border-2 border-white border-dashed ${
+                     <div key={i} className={`rounded-lg border-2 border-white/30 border-dashed bg-white/5 ${
                        isVertical 
-                         ? 'w-8 h-11 xs:w-9 xs:h-12 sm:w-11 sm:h-16' 
-                         : 'w-10 h-14 md:w-14 md:h-20'
+                         ? 'w-9 h-13 sm:w-11 sm:h-16' 
+                         : 'w-11 h-16 sm:w-14 sm:h-20'
                      }`}></div>
                  ))}
              </div>
@@ -219,17 +188,13 @@ export const Table: React.FC<TableProps> = ({ gameState, heroId, timeLeft, total
       </div>
 
       {pot > 0 && (
-         <div className={`absolute left-1/2 -translate-x-1/2 bg-black/90 rounded-full border border-sol-green/50 text-white font-bold tabular-nums flex items-center backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.5)] z-40 animate-in zoom-in duration-300 ${
+         <div className={`absolute left-1/2 -translate-x-1/2 bg-black/90 rounded-full border border-sol-green/50 text-white font-bold tabular-nums flex items-center gap-2 shadow-xl z-30 ${
              isVertical 
-               ? 'top-[58%] xs:top-[60%] px-3 py-1 xs:px-4 xs:py-1.5 sm:px-5 sm:py-2 gap-1 xs:gap-1.5 sm:gap-2' 
-               : 'top-[60%] px-4 py-2 md:px-5 md:py-2 gap-2'
+               ? 'top-[56%] px-4 py-2' 
+               : 'top-[63%] px-5 py-2'
          }`}>
-             <span className={`text-sol-green font-extrabold tracking-wider ${
-               isVertical ? 'text-[10px] xs:text-xs sm:text-sm' : 'text-xs md:text-sm'
-             }`}>POT</span>
-             <span className={`font-mono text-white ${
-               isVertical ? 'text-xs xs:text-sm sm:text-base' : 'text-sm md:text-lg'
-             }`}>{formatPot(pot)}</span>
+             <span className="text-sol-green font-bold text-xs sm:text-sm">POT</span>
+             <span className="font-mono text-white text-sm sm:text-lg">{formatPot(pot)}</span>
          </div>
       )}
 

@@ -4,7 +4,7 @@ import { Menu, X, User as UserIcon, LogOut, Trophy, PlusCircle, Grid, RefreshCw,
 import { Button } from './ui/Button';
 import { User } from '../types';
 import { getVipStatus, ADMIN_WALLET_ADDRESS } from '../constants';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useWallet } from './WalletContextProvider';
 
 interface NavbarProps {
   user: User | null;

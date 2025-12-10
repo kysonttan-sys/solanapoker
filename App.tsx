@@ -9,7 +9,7 @@ import { Lobby } from './pages/Lobby';
 import { GameRoom } from './pages/GameRoom';
 import { Swap } from './pages/Swap';
 import { Admin } from './pages/Admin';
-import { Documentation } from './pages/Documentation'; 
+import { Documentation } from './pages/Documentation';
 import { TermsOfUse } from './pages/TermsOfUse';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { CookiePolicy } from './pages/CookiePolicy';
@@ -24,11 +24,10 @@ import { DepositWithdraw } from './components/DepositWithdraw';
 import { CookieConsent } from './components/CookieConsent';
 import { TurnDeviceOverlay } from './components/TurnDeviceOverlay';
 import { TestnetDisclaimer } from './components/TestnetDisclaimer';
-import { WalletContextProvider } from './components/WalletContextProvider';
+import { WalletContextProvider, useWallet, useConnection } from './components/WalletContextProvider';
 import { MOCK_USER, MOCK_TABLES, MOCK_TOURNAMENTS, ADMIN_WALLET_ADDRESS } from './constants';
 import { User, GameType, PokerTable, Tournament } from './types';
 import { Twitter, Facebook, Instagram, Music, Send, Radio } from 'lucide-react';
-import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 const AppContent: React.FC = () => {

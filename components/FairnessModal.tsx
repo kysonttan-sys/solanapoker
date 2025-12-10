@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/Modal';
 import { ShieldCheck, Lock, Unlock, RefreshCw, CheckCircle, ExternalLink, Hash, Copy, ChevronRight } from 'lucide-react';
-import { GameState } from '../../utils/pokerGameLogic';
+import { GameState } from '../utils/pokerGameLogic';
 
 interface FairnessModalProps {
   isOpen: boolean;

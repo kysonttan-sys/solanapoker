@@ -141,8 +141,25 @@ export class GameManager {
 
         try {
             const dbUser = await db.user.findUnique({ where: { id: user.id } });
-            if (!dbUser || dbUser.balance < amount) {
-                return socket.emit('error', { message: 'Insufficient funds' });
+            console.log(`[handleSit] DB User lookup for ${user.id}:`, dbUser ? { balance: dbUser.balance } : 'NOT FOUND');
+            
+            if (!dbUser) {
+                console.log(`[handleSit] User ${user.id} not found in database, creating...`);
+                // Create user if they don't exist (for social login users)
+                await db.user.create({
+                    data: {
+                        id: user.id,
+                        walletAddress: user.id,
+                        username: user.name || user.username || 'Player',
+                        balance: 0
+                    }
+                });
+                return socket.emit('error', { message: 'Please deposit funds first. Your balance is 0.' });
+            }
+            
+            if (dbUser.balance < amount) {
+                console.log(`[handleSit] Insufficient funds: has ${dbUser.balance}, needs ${amount}`);
+                return socket.emit('error', { message: `Insufficient funds. You have ${dbUser.balance.toLocaleString()} chips but need ${amount.toLocaleString()}.` });
             }
 
             // Note: Blockchain balance verification is handled client-side
@@ -163,10 +180,12 @@ export class GameManager {
                 })
             ]);
             
+            console.log(`[handleSit] Buy-in successful: ${amount} chips, new balance: ${updatedUser.balance}`);
             socket.emit('balanceUpdate', updatedUser.balance);
 
-        } catch (e) {
-            return socket.emit('error', { message: 'Transaction failed' });
+        } catch (e: any) {
+            console.error(`[handleSit] Transaction error:`, e);
+            return socket.emit('error', { message: e?.message || 'Transaction failed' });
         }
 
         const updatedTable = PokerEngine.addPlayer(table, {
@@ -332,7 +351,10 @@ export class GameManager {
 
         // Track hand completion for fairness verification
         // Use CURRENT fairness state (this is the hand that just completed)
-        const handToSave = {
+        // Find first human winner to associate the hand with (bots don't exist in DB)
+        const humanWinner = newState.winners.find((w: any) => !w.playerId.startsWith('bot_'));
+        
+        const handToSave = humanWinner ? {
             tableId: table.tableId,
             handNumber: table.handNumber || 1,
             fairnessHash: table.fairness?.currentServerHash || '',
@@ -343,8 +365,8 @@ export class GameManager {
             winnerIds: JSON.stringify(newState.winners.map((w: any) => w.playerId)),
             potAmount: newState.pot || 0,
             rakeAmount: Math.round((newState.pot || 0) * 0.05), // 5% rake
-            user: { connect: { id: newState.winners[0].playerId } } // Required by Prisma schema
-        };
+            user: { connect: { id: humanWinner.playerId } }
+        } : null;
 
         // Update system-wide stats (totalHands)
         try {
@@ -362,50 +384,66 @@ export class GameManager {
             });
         } catch(e) { console.error('SystemState Update Error', e); }
 
-        newState.winners.forEach(async (winner: any) => {
-            if (!winner.playerId.startsWith('bot_')) {
-                try {
-                    await db.$transaction([
-                        db.user.update({
-                            where: { id: winner.playerId },
-                            data: { 
-                                balance: { increment: winner.amount },
-                                totalWinnings: { increment: winner.amount },
-                                totalHands: { increment: 1 }
-                            }
-                        }),
-                        db.transaction.create({
-                            data: {
-                                userId: winner.playerId,
-                                type: 'GAME_WIN',
-                                amount: winner.amount,
-                                status: 'COMPLETED',
-                                handId: table.handNumber?.toString() || '1'
-                            }
-                        }),
-                        // Save hand for fairness verification
-                        db.hand.create({
-                            data: handToSave
-                        })
-                    ]);
-
-                    // Note: Rake distribution is automatic via protocol fee split
-                } catch(e) { console.error('DB Update Error on Win', e); }
+        // Process each winner - update balances and record transactions
+        for (const winner of newState.winners) {
+            // Skip bots - they don't have DB records
+            if (winner.playerId.startsWith('bot_')) {
+                console.log(`[Win] Bot ${winner.playerId} won $${winner.amount} (not saved to DB)`);
+                continue;
             }
-        });
+            
+            try {
+                // Build transaction array
+                const dbOps: any[] = [
+                    db.user.update({
+                        where: { id: winner.playerId },
+                        data: { 
+                            balance: { increment: winner.amount },
+                            totalWinnings: { increment: winner.amount },
+                            totalHands: { increment: 1 }
+                        }
+                    }),
+                    db.transaction.create({
+                        data: {
+                            userId: winner.playerId,
+                            type: 'GAME_WIN',
+                            amount: winner.amount,
+                            status: 'COMPLETED',
+                            handId: table.handNumber?.toString() || '1'
+                        }
+                    })
+                ];
+                
+                // Only save hand history if we have valid handToSave data
+                if (handToSave) {
+                    dbOps.push(db.hand.create({ data: handToSave }));
+                }
+                
+                await db.$transaction(dbOps);
+                console.log(`[Win] Player ${winner.playerId} won $${winner.amount} - saved to DB`);
+            } catch(e) { 
+                console.error('DB Update Error on Win:', e); 
+            }
+        }
 
         // Schedule next hand
         setTimeout(async () => {
             const t = this.tables.get(tableId);
             if (t) {
                 try {
-                    // Check if we have enough active players (need at least bigBlind to play)
-                    const activePlayers = t.players.filter((p: any) => 
-                        (p.status === 'active' || p.status === 'all-in') && p.balance >= t.bigBlind
+                    // Check if we have enough eligible players for next hand
+                    // After showdown, ALL players (except sitting-out/eliminated) with sufficient balance can play
+                    const eligiblePlayers = t.players.filter((p: any) => 
+                        p.status !== 'sitting-out' && 
+                        p.status !== 'eliminated' && 
+                        p.balance >= t.bigBlind
                     );
                     
-                    if (activePlayers.length < 2) {
-                        console.log(`[GameFlow] Not enough active players (${activePlayers.length}) for next hand at table ${tableId}`);
+                    console.log(`[GameFlow] Checking next hand eligibility - ${eligiblePlayers.length} eligible players:`, 
+                        eligiblePlayers.map((p: any) => `${p.name}(${p.status}, $${p.balance})`).join(', '));
+                    
+                    if (eligiblePlayers.length < 2) {
+                        console.log(`[GameFlow] Not enough eligible players (${eligiblePlayers.length}) for next hand at table ${tableId}`);
                         // Reset game state to waiting for players
                         const resetState = {
                             ...t,

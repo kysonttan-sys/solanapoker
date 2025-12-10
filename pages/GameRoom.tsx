@@ -12,7 +12,7 @@ import { ChatBox } from '../components/ChatBox';
 import { Button } from '../components/ui/Button';
 import { GameState } from '../utils/pokerGameLogic';
 import { generateSeed } from '../utils/fairness';
-import { playGameSound } from '../utils/audio';
+import { playGameSound, initAudio, setAudioEnabled } from '../utils/audio';
 import { PokerTable, Tournament, User, GameType } from '../types';
 import { useSocket } from '../hooks/useSocket';
 
@@ -67,6 +67,28 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
   // Gameplay Local State
   const [clientSeed, setClientSeed] = useState(generateSeed());
   const [timeLeft, setTimeLeft] = useState(30);
+
+  // --- AUDIO INITIALIZATION ---
+  // Initialize audio context on first user interaction (required by browser autoplay policy)
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      initAudio();
+      setAudioEnabled(!isMuted);
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('keydown', handleFirstInteraction);
+    };
+    document.addEventListener('click', handleFirstInteraction);
+    document.addEventListener('keydown', handleFirstInteraction);
+    return () => {
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('keydown', handleFirstInteraction);
+    };
+  }, []);
+
+  // Sync audio enabled state with mute toggle
+  useEffect(() => {
+    setAudioEnabled(!isMuted);
+  }, [isMuted]);
 
   // --- SOCKET CONNECTION & EVENTS ---
   useEffect(() => {
@@ -252,6 +274,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
 
   const handleAction = (action: 'fold' | 'check' | 'call' | 'raise', amount?: number) => {
       if (!gameState || !user || !socket) return;
+      initAudio(); // Initialize audio on first user action
       socket.emit('playerAction', { tableId, action, amount: amount || 0 });
       if (!isMuted) playGameSound('chip');
   };
@@ -323,7 +346,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
                     <ShieldCheck size={18} />
                 </button>
                 <div className="h-6 w-px bg-white/10 mx-1 hidden md:block"></div>
-                <button onClick={() => setIsMuted(!isMuted)} className="p-2 text-gray-400 hover:text-white hidden md:block">
+                <button onClick={() => { initAudio(); setIsMuted(!isMuted); setAudioEnabled(isMuted); }} className="p-2 text-gray-400 hover:text-white hidden md:block">
                     {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
                 </button>
                 <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 text-gray-400 hover:text-white md:hidden">
@@ -341,27 +364,27 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
                 <button onClick={() => { setShowBB(!showBB); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-300 hover:bg-white/5 rounded-lg">
                     <Settings size={16} /> Show in BB ({showBB ? 'On' : 'Off'})
                 </button>
-                <button onClick={() => { setIsMuted(!isMuted); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-300 hover:bg-white/5 rounded-lg">
+                <button onClick={() => { initAudio(); setIsMuted(!isMuted); setAudioEnabled(isMuted); setIsMenuOpen(false); }} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-300 hover:bg-white/5 rounded-lg">
                     {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />} Sound
                 </button>
             </div>
         )}
 
         {/* TABLE AREA */}
-        <div className="flex-1 relative bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#1a2c2c] via-[#0d1414] to-black overflow-hidden flex items-center justify-center">
+        <div className="flex-1 relative bg-gradient-to-b from-[#0a1a15] via-[#0d1f1a] to-[#081210] overflow-hidden flex items-center justify-center p-2 sm:p-4">
             <Table 
                 gameState={gameState} 
                 heroId={user?.id || 'spectator'} 
                 timeLeft={timeLeft} 
                 totalTime={30}
-                onSit={handleJoinRequest} // Pass the join handler down to empty seats
+                onSit={handleJoinRequest}
                 fourColor={fourColor}
                 showBB={showBB}
             />
             {isSpectator && (
-                <div className="absolute top-2 left-2 xs:top-3 xs:left-3 sm:top-4 sm:left-4 bg-black/70 backdrop-blur-md px-2 xs:px-3 sm:px-4 py-1 xs:py-1.5 sm:py-2 rounded-lg border border-sol-blue/30 flex items-center gap-1 xs:gap-1.5 sm:gap-2 pointer-events-none z-30">
-                    <Eye size={12} className="text-sol-blue xs:w-[14px] xs:h-[14px] sm:w-4 sm:h-4" />
-                    <span className="text-[9px] xs:text-[10px] sm:text-xs font-bold text-sol-blue uppercase tracking-wider">Spectator</span>
+                <div className="absolute top-3 left-3 sm:top-4 sm:left-4 bg-black/80 backdrop-blur px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg border border-sol-blue/40 flex items-center gap-2 z-30">
+                    <Eye size={14} className="text-sol-blue sm:w-4 sm:h-4" />
+                    <span className="text-[10px] sm:text-xs font-bold text-sol-blue uppercase tracking-wider">Spectating</span>
                 </div>
             )}
         </div>

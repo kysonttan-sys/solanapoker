@@ -55,6 +55,7 @@ async function main() {
         update: {},
         create: {
           id: p.id,
+          walletAddress: p.id,
           username: p.username,
           avatarUrl: `https://ui-avatars.com/api/?name=${p.username}&background=random`,
           balance: 5000,

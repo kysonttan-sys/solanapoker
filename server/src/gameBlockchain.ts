@@ -264,7 +264,7 @@ export class GameBlockchainHelper {
             // Get all users with wallet addresses
             const users = await db.user.findMany({
                 where: {
-                    walletAddress: { not: null }
+                    walletAddress: { not: '' }
                 },
                 take: 100 // Limit to prevent rate limiting
             });

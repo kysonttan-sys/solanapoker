@@ -11,7 +11,7 @@ import { Modal } from '../components/ui/Modal';
 import { MOCK_USER, MOCK_STATS, LEADERBOARD_DATA, getVipStatus, REFERRAL_TIERS, getHostStatus, ADMIN_WALLET_ADDRESS } from '../constants';
 import { User } from '../types';
 import { Camera, Mail, AtSign, Wallet, Save, X, Image as ImageIcon, Lock, Trophy, TrendingUp, TrendingDown, Eye, Copy, Check, Users, Gift, Coins, Share2, DollarSign, PieChart as PieChartIcon, Crown, Network, Activity, Target, Clock, Settings, FileText, QrCode, Volume2, VolumeX, Palette, ArrowUpCircle, ArrowDownCircle, Ghost, EyeOff, Shield, UserPlus, MessageSquare, Trash2, Circle, Search, Send, ExternalLink, AlertTriangle, Loader2, Database, Terminal } from 'lucide-react';
-import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import { useConnection, useWallet } from '../components/WalletContextProvider';
 import { withdrawFromVault } from '../utils/solanaContract';
 
 // --- REAL USER DATA (Backend will populate from transactions) ---
@@ -401,11 +401,15 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
 
   const handleRecoverFunds = async () => {
       if (!stuckSession || isRecovering) return;
+      if (!wallet.publicKey) {
+          alert("Please connect your wallet first.");
+          return;
+      }
       
       setIsRecovering(true);
       try {
           // Attempt withdrawal from smart contract
-          const signature = await withdrawFromVault(connection, wallet, stuckSession.amount);
+          const signature = await withdrawFromVault(connection, wallet.sendTransaction, wallet.publicKey, stuckSession.amount);
           console.log("Recovery Success:", signature);
           
           if (onUpdateUser && profileForm) {
