@@ -10,6 +10,7 @@ import validator from 'validator';
 import { GameManager } from './gameManager';
 import { db } from './db';
 import { distributionManager } from './distributionManager';
+import { tournamentManager } from './tournamentManager';
 
 // Global error handlers
 process.on('uncaughtException', (err) => {
@@ -737,6 +738,128 @@ function formatTimeAgo(date: Date): string {
     return date.toLocaleDateString();
 }
 
+// 3f. Referral System - Multi-Level Tracking
+app.get('/api/referrals/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        // Get user's referral code
+        const user = await db.user.findUnique({
+            where: { id: userId },
+            select: { referralCode: true, referralRank: true }
+        });
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Build referral tree (3 levels deep)
+        const buildReferralTree = async (referralCode: string, level: number, maxLevel: number = 3): Promise<any[]> => {
+            if (level > maxLevel) return [];
+
+            const referrals = await db.user.findMany({
+                where: { referredBy: referralCode },
+                select: {
+                    id: true,
+                    username: true,
+                    createdAt: true,
+                    totalHands: true,
+                    referralCode: true
+                }
+            });
+
+            const tree = await Promise.all(referrals.map(async (ref) => {
+                // Calculate earnings from this referral (simplified - would need transaction tracking)
+                const earnings = ref.totalHands * 0.05 * ([5, 10, 15, 20][user.referralRank || 0] / 100);
+
+                const children = await buildReferralTree(ref.referralCode, level + 1, maxLevel);
+
+                return {
+                    id: ref.id,
+                    username: ref.username,
+                    joinedAt: ref.createdAt,
+                    level,
+                    totalHands: ref.totalHands,
+                    earnings,
+                    children
+                };
+            }));
+
+            return tree;
+        };
+
+        const tree = await buildReferralTree(user.referralCode, 1);
+
+        // Calculate stats
+        const countReferrals = (nodes: any[], level: number): { total: number; byLevel: Record<number, number> } => {
+            let total = nodes.length;
+            const byLevel: Record<number, number> = { 1: 0, 2: 0, 3: 0 };
+            byLevel[level] = nodes.length;
+
+            nodes.forEach(node => {
+                if (node.children && node.children.length > 0) {
+                    const childStats = countReferrals(node.children, level + 1);
+                    total += childStats.total;
+                    Object.entries(childStats.byLevel).forEach(([lvl, count]) => {
+                        byLevel[parseInt(lvl)] = (byLevel[parseInt(lvl)] || 0) + count;
+                    });
+                }
+            });
+
+            return { total, byLevel };
+        };
+
+        const stats = countReferrals(tree, 1);
+
+        // Calculate total earnings (would need transaction table in production)
+        const totalEarnings = tree.reduce((sum, ref) => {
+            return sum + ref.earnings + (ref.children?.reduce((childSum: number, child: any) =>
+                childSum + child.earnings + (child.children?.reduce((grandSum: number, grand: any) =>
+                    grandSum + grand.earnings, 0) || 0), 0) || 0);
+        }, 0);
+
+        // Calculate this month's earnings
+        const thisMonthStart = new Date();
+        thisMonthStart.setDate(1);
+        thisMonthStart.setHours(0, 0, 0, 0);
+
+        const thisMonthEarnings = totalEarnings * 0.3; // Simplified - would filter by date
+
+        // Determine next rank requirements
+        const rank = user.referralRank || 0;
+        const requirements = [
+            { directs: 1, volume: 0 },    // Scout
+            { directs: 3, volume: 0 },    // Agent
+            { directs: 10, volume: 0 },   // Broker
+            { directs: 30, volume: 0 },   // Partner
+        ];
+
+        const nextRankRequirements = rank < 3 ? {
+            directsNeeded: Math.max(0, requirements[rank + 1].directs - stats.byLevel[1]),
+            volumeNeeded: 0
+        } : null;
+
+        res.json({
+            stats: {
+                totalReferrals: stats.total,
+                directReferrals: stats.byLevel[1] || 0,
+                level2Referrals: stats.byLevel[2] || 0,
+                level3Referrals: stats.byLevel[3] || 0,
+                totalEarnings,
+                thisMonthEarnings,
+                referralCode: user.referralCode,
+                rank,
+                rankName: ['Scout', 'Agent', 'Broker', 'Partner'][rank],
+                nextRankRequirements
+            },
+            tree
+        });
+    } catch (error) {
+        console.error('Referral API error:', error);
+        res.status(500).json({ error: 'Failed to fetch referral data' });
+    }
+});
+
 // 4. Lobby Rooms (Active Tables from Memory)
 app.get('/api/tables', (req, res) => {
     // Convert Map to Array for JSON response
@@ -744,12 +867,115 @@ app.get('/api/tables', (req, res) => {
     res.json(tables);
 });
 
-// 4b. Active Tournaments
-app.get('/api/tournaments', (req, res) => {
-    // Get all tournaments from GameManager
-    const allTables = gameManager.getAllTables();
-    const tournaments = allTables.filter(table => table.gameMode === 'tournament');
-    res.json(tournaments);
+// ===============================
+// TOURNAMENT ENDPOINTS
+// ===============================
+
+// Get active tournaments
+app.get('/api/tournaments', async (req, res) => {
+    try {
+        const tournaments = await tournamentManager.getActiveTournaments();
+
+        // Transform database tournaments to match frontend Tournament type
+        const formattedTournaments = tournaments.map(t => {
+            const players = JSON.parse(t.players);
+            return {
+                id: t.id,
+                name: t.name,
+                buyIn: t.buyIn,
+                prizePool: t.prizePool,
+                seats: t.maxSeats,
+                maxPlayers: t.maxPlayers,
+                registeredPlayers: t.registeredCount,
+                status: t.status,
+                startTime: t.startTime?.toISOString(),
+                speed: 'REGULAR', // Default
+                smallBlind: t.smallBlind,
+                bigBlind: t.bigBlind
+            };
+        });
+
+        res.json(formattedTournaments);
+    } catch (error) {
+        console.error('[API] Error fetching tournaments:', error);
+        res.status(500).json({ error: 'Failed to fetch tournaments' });
+    }
+});
+
+// Get specific tournament
+app.get('/api/tournaments/:id', async (req, res) => {
+    try {
+        const tournament = await tournamentManager.getTournament(req.params.id);
+        if (!tournament) {
+            return res.status(404).json({ error: 'Tournament not found' });
+        }
+        res.json(tournament);
+    } catch (error) {
+        console.error('[API] Error fetching tournament:', error);
+        res.status(500).json({ error: 'Failed to fetch tournament' });
+    }
+});
+
+// Create tournament
+app.post('/api/tournaments', async (req, res) => {
+    try {
+        const { name, buyIn, maxPlayers, minPlayers, maxSeats, startingChips, smallBlind, bigBlind, creatorId } = req.body;
+
+        const tournament = await tournamentManager.createTournament({
+            name,
+            buyIn,
+            maxPlayers: maxPlayers || 9,
+            minPlayers: minPlayers || 6,
+            maxSeats: maxSeats || 9,
+            startingChips: startingChips || 10000,
+            smallBlind: smallBlind || 50,
+            bigBlind: bigBlind || 100,
+            creatorId
+        });
+
+        res.json({ success: true, tournament });
+    } catch (error) {
+        console.error('[API] Error creating tournament:', error);
+        res.status(500).json({ error: 'Failed to create tournament' });
+    }
+});
+
+// Register for tournament
+app.post('/api/tournaments/:id/register', async (req, res) => {
+    try {
+        const { userId, username } = req.body;
+
+        if (!userId || !username) {
+            return res.status(400).json({ error: 'userId and username required' });
+        }
+
+        const result = await tournamentManager.registerPlayer(req.params.id, userId, username);
+
+        if (!result.success) {
+            return res.status(400).json({ error: result.message });
+        }
+
+        res.json(result);
+    } catch (error) {
+        console.error('[API] Error registering for tournament:', error);
+        res.status(500).json({ error: 'Failed to register for tournament' });
+    }
+});
+
+// Start tournament manually (for testing/admin)
+app.post('/api/tournaments/:id/start', async (req, res) => {
+    try {
+        const result = await tournamentManager.startTournament(req.params.id);
+
+        if (!result.success) {
+            return res.status(400).json({ error: result.message });
+        }
+
+        res.json(result);
+    } catch (error) {
+        console.error('[API] Error starting tournament:', error);
+        res.status(500).json({ error: 'Failed to start tournament' });
+    }
 });
 
 // 5. Current fairness state — returns current hand fairness data

@@ -143,3 +143,49 @@ model RakeDistribution {
   @@index([referrerUserId])
   @@index([createdAt])
 }
+
+// Tournament System
+model Tournament {
+  id                String   @id @default(cuid())
+  name              String
+  buyIn             Float
+  prizePool         Float    @default(0)
+
+  // Tournament Structure
+  maxPlayers        Int      @default(9)
+  minPlayers        Int      @default(6)
+  maxSeats          Int      @default(9) // 6 or 9 seat tables
+
+  // Blind Structure
+  startingChips     Int      @default(10000)
+  smallBlind        Int      @default(50)
+  bigBlind          Int      @default(100)
+  blindLevel        Int      @default(1)
+  handsPerLevel     Int      @default(10) // Blinds increase every 10 hands
+  currentHand       Int      @default(0)
+
+  // Registration
+  players           String   @default("[]") // JSON array of player objects {userId, username, chips, position}
+  registeredCount   Int      @default(0)
+
+  // Status
+  status            String   @default("REGISTERING") // REGISTERING, RUNNING, FINISHED
+
+  // Host Info
+  creatorId         String?
+  hostShare         Float    @default(0)
+
+  // Timing
+  startTime         DateTime?
+  finishTime        DateTime?
+
+  // Results
+  winners           String?  // JSON array: [{userId, position, prize}]
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([status])
+  @@index([creatorId])
+  @@index([createdAt])
+}

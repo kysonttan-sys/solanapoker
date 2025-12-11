@@ -9,6 +9,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { WalletSettings } from '../components/WalletSettings';
+import { ReferralDashboard } from '../components/ReferralDashboard';
 import { getApiUrl } from '../utils/api';
 import { MOCK_USER, MOCK_STATS, LEADERBOARD_DATA, getVipStatus, REFERRAL_TIERS, getHostStatus, ADMIN_WALLET_ADDRESS } from '../constants';
 import { User } from '../types';
@@ -845,11 +846,11 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
                   >
                       Overview
                   </button>
-                  <button 
+                  <button
                     onClick={() => setActiveTab('friends')}
                     className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'friends' ? 'border-sol-green text-white' : 'border-transparent text-gray-400 hover:text-white'}`}
                   >
-                      <Users size={16} /> Friends
+                      <Users size={16} /> Referrals
                   </button>
                   <button 
                     onClick={() => setActiveTab('history')}
@@ -1025,76 +1026,10 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
               </div>
           )}
 
-          {activeTab === 'friends' && (
-              // FRIENDS TAB
-              <div className="space-y-6 animate-in slide-in-from-right-4">
-                  <div className="flex justify-between items-center bg-white/5 p-4 rounded-xl border border-white/10">
-                      <div>
-                          <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                              <Users size={18} className="text-sol-green"/> My Connections
-                          </h3>
-                          <p className="text-sm text-gray-400">Manage your poker buddies and invites.</p>
-                      </div>
-                      <div className="relative">
-                          <input 
-                              type="text" 
-                              placeholder="Find friend by ID..." 
-                              className="bg-black/40 border border-white/10 rounded-lg pl-8 pr-4 py-2 text-sm text-white focus:border-sol-green focus:outline-none"
-                          />
-                          <Search size={14} className="absolute left-2.5 top-2.5 text-gray-500" />
-                      </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {friendsList.length > 0 ? (
-                          friendsList.map((friend: any) => (
-                              <Card key={friend.id} className="bg-white/5 border-white/10 hover:border-white/20 transition-all flex items-center justify-between group">
-                                  <div className="flex items-center gap-3">
-                                      <div className="relative">
-                                          <img src={friend.avatar} alt={friend.player} className="w-10 h-10 rounded-full border border-white/10" />
-                                          <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-black ${friend.isOnline ? 'bg-green-500' : 'bg-gray-500'}`} />
-                                      </div>
-                                      <div>
-                                          <h4 className="font-bold text-white text-sm">{friend.player}</h4>
-                                          <p className="text-xs text-gray-500 flex items-center gap-1">
-                                              {friend.isOnline ? <span className="text-green-500">Online</span> : 'Offline'}
-                                          </p>
-                                      </div>
-                                  </div>
-                                  <div className="flex gap-2">
-                                      <button 
-                                          onClick={() => handleOpenChat(friend)}
-                                          className="p-2 bg-sol-blue/10 text-sol-blue rounded-lg hover:bg-sol-blue hover:text-white transition-colors" 
-                                          title="Message"
-                                      >
-                                          <MessageSquare size={16} />
-                                      </button>
-                                      <button className="p-2 bg-sol-green/10 text-sol-green rounded-lg hover:bg-sol-green hover:text-black transition-colors" title="Invite to Table">
-                                          <UserPlus size={16} />
-                                      </button>
-                                      <button 
-                                          onClick={() => handleRemoveFriend(friend.id)}
-                                          className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-colors opacity-0 group-hover:opacity-100" 
-                                          title="Remove Friend"
-                                      >
-                                          <Trash2 size={16} />
-                                      </button>
-                                  </div>
-                              </Card>
-                          ))
-                      ) : (
-                          <div className="col-span-full py-12 text-center text-gray-500 bg-white/5 rounded-xl border border-dashed border-white/10">
-                              <p>No friends added yet. Share your profile to connect!</p>
-                          </div>
-                      )}
-                      
-                      <button className="flex flex-col items-center justify-center p-6 border border-dashed border-white/10 rounded-xl hover:bg-white/5 transition-colors text-gray-500 hover:text-sol-green group">
-                          <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-2 group-hover:bg-sol-green/20">
-                              <UserPlus size={20} className="group-hover:text-sol-green"/>
-                          </div>
-                          <span className="text-sm font-bold">Add New Friend</span>
-                      </button>
-                  </div>
+          {activeTab === 'friends' && profileForm && (
+              // REFERRAL DASHBOARD TAB
+              <div className="animate-in slide-in-from-right-4">
+                  <ReferralDashboard userId={profileForm.id} />
               </div>
           )}
 
