@@ -20,7 +20,7 @@ Your Solana Poker platform has a comprehensive 6-way rake distribution system wi
 
 ---
 
-## 📊 6-Way Distribution Breakdown
+## 📊 5-Way Distribution Breakdown
 
 ### 1. **Host Revenue** (30-40%)
 - **Who**: Table host who created the game
@@ -67,10 +67,6 @@ Your Solana Poker platform has a comprehensive 6-way rake distribution system wi
 - **Amount**: Remaining after all allocations (typically 30-50%)
 - **Purpose**: Platform maintenance, development, operations
 - **Payment**: Instant - Added to developer wallet
-
-### 6. **Community Pool** (Variable)
-- **Purpose**: Special events, tournaments, promotions
-- **Distribution**: Manual by platform administrators
 
 ---
 

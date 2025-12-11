@@ -8,6 +8,7 @@ import {
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
+import { WalletSettings } from '../components/WalletSettings';
 import { getApiUrl } from '../utils/api';
 import { MOCK_USER, MOCK_STATS, LEADERBOARD_DATA, getVipStatus, REFERRAL_TIERS, getHostStatus, ADMIN_WALLET_ADDRESS } from '../constants';
 import { User } from '../types';
@@ -1482,6 +1483,9 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
                         </div>
                     </form>
                  </div>
+
+                 {/* Wallet Security Settings */}
+                 <WalletSettings />
               </div>
           )}
 

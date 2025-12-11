@@ -3,6 +3,7 @@ import { useWallet, useConnection } from './WalletContextProvider';
 import { useSocket } from '../hooks/useSocket';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
+import { TransactionApprovalModal } from './TransactionApprovalModal';
 import { ArrowDownUp, Loader, CheckCircle, AlertCircle, CreditCard, Building2, Wallet } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
@@ -10,6 +11,13 @@ interface TransactionStatus {
     status: 'idle' | 'processing' | 'confirming' | 'success' | 'error';
     message?: string;
     txHash?: string;
+}
+
+interface PendingTransaction {
+    type: 'deposit' | 'withdraw';
+    amount: number;
+    from?: string;
+    to?: string;
 }
 
 export const DepositWithdraw: React.FC<{
@@ -31,6 +39,8 @@ export const DepositWithdraw: React.FC<{
     const [onChainBalance, setOnChainBalance] = useState<number>(0);
     const [txStatus, setTxStatus] = useState<TransactionStatus>({ status: 'idle' });
     const [loading, setLoading] = useState(false);
+    const [showApprovalModal, setShowApprovalModal] = useState(false);
+    const [pendingTransaction, setPendingTransaction] = useState<PendingTransaction | null>(null);
 
     // Debug wallet connection
     useEffect(() => {
@@ -113,7 +123,6 @@ export const DepositWithdraw: React.FC<{
         }
 
         const solAmount = parseFloat(amount);
-        const chips = Math.floor(solAmount * 100000); // Convert SOL to chips (1 SOL = 100,000 chips)
 
         if (solAmount <= 0) {
             setTxStatus({
@@ -122,6 +131,23 @@ export const DepositWithdraw: React.FC<{
             });
             return;
         }
+
+        // Show approval modal first
+        setPendingTransaction({
+            type: 'deposit',
+            amount: solAmount,
+            from: publicKey.toBase58(),
+            to: 'Vault Contract'
+        });
+        setShowApprovalModal(true);
+    };
+
+    // Execute deposit after user approves
+    const executeDeposit = async () => {
+        if (!publicKey || !wallet || !pendingTransaction) return;
+
+        const solAmount = pendingTransaction.amount;
+        const chips = Math.floor(solAmount * 100000); // Convert SOL to chips (1 SOL = 100,000 chips)
 
         try {
             setLoading(true);
@@ -176,6 +202,8 @@ export const DepositWithdraw: React.FC<{
             });
         } finally {
             setLoading(false);
+            setShowApprovalModal(false);
+            setPendingTransaction(null);
         }
     };
 
@@ -198,6 +226,23 @@ export const DepositWithdraw: React.FC<{
             });
             return;
         }
+
+        // Show approval modal first
+        setPendingTransaction({
+            type: 'withdraw',
+            amount: solAmount,
+            from: 'Vault Contract',
+            to: publicKey.toBase58()
+        });
+        setShowApprovalModal(true);
+    };
+
+    // Execute withdrawal after user approves
+    const executeWithdraw = async () => {
+        if (!publicKey || !wallet || !pendingTransaction) return;
+
+        const solAmount = pendingTransaction.amount;
+        const chips = Math.floor(solAmount * 100000); // Convert SOL to chips
 
         try {
             setLoading(true);
@@ -252,7 +297,27 @@ export const DepositWithdraw: React.FC<{
             });
         } finally {
             setLoading(false);
+            setShowApprovalModal(false);
+            setPendingTransaction(null);
         }
+    };
+
+    // Handle approval modal confirmation
+    const handleApproveTransaction = () => {
+        if (!pendingTransaction) return;
+
+        if (pendingTransaction.type === 'deposit') {
+            executeDeposit();
+        } else {
+            executeWithdraw();
+        }
+    };
+
+    // Handle approval modal cancel
+    const handleCancelApproval = () => {
+        setShowApprovalModal(false);
+        setPendingTransaction(null);
+        setLoading(false);
     };
 
     const handleBuyCrypto = () => {
@@ -285,6 +350,7 @@ export const DepositWithdraw: React.FC<{
     }
 
     return (
+        <>
         <Modal isOpen={isOpen} onClose={onClose} title="Deposit / Withdraw / Buy">
             <div className="w-full max-w-md">
                 {/* Balance Display */}
@@ -532,6 +598,16 @@ export const DepositWithdraw: React.FC<{
                 )}
             </div>
         </Modal>
+
+        {/* Transaction Approval Modal */}
+        <TransactionApprovalModal
+            isOpen={showApprovalModal}
+            onClose={handleCancelApproval}
+            onApprove={handleApproveTransaction}
+            transaction={pendingTransaction}
+            loading={loading}
+        />
+    </>
     );
 };
 
