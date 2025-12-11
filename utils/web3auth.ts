@@ -321,7 +321,7 @@ export const signAndSendTransaction = async (
             throw new Error("No accounts found in Web3Auth provider");
         }
 
-        const { PublicKey } = await import("@solana/web3.js");
+        const { PublicKey, Keypair } = await import("@solana/web3.js");
         const userPublicKey = new PublicKey(accounts[0]);
 
         // Get latest blockhash
@@ -329,32 +329,61 @@ export const signAndSendTransaction = async (
         transaction.recentBlockhash = blockhash;
         transaction.feePayer = userPublicKey;
 
-        // Serialize transaction
-        const serializedTx = transaction.serialize({ requireAllSignatures: false });
-        const message = Buffer.from(serializedTx).toString("base64");
+        console.log("[Web3Auth] Preparing transaction for signing...");
 
-        console.log("[Web3Auth] Sending transaction...");
+        // Get private key from Web3Auth to sign manually
+        // This avoids the partialSign issue
+        const privateKeyHex = await provider.request({
+            method: "solanaPrivateKey"
+        }) as string;
 
-        // Sign and send
-        const result = await provider.request({
-            method: "signAndSendTransaction",
-            params: { message }
-        }) as { signature: string } | null;
-
-        if (!result?.signature) {
-            throw new Error("Failed to send transaction");
+        if (!privateKeyHex) {
+            throw new Error("Failed to get private key from Web3Auth");
         }
+
+        // Convert hex private key to Keypair
+        const privateKeyBytes = Buffer.from(privateKeyHex, "hex");
+        const keypair = Keypair.fromSecretKey(privateKeyBytes);
+
+        console.log("[Web3Auth] Signing transaction with keypair...");
+
+        // Sign the transaction with the keypair
+        transaction.sign(keypair);
+
+        console.log("[Web3Auth] Sending transaction to Solana...");
+
+        // Send the signed transaction
+        const signature = await connection.sendRawTransaction(
+            transaction.serialize(),
+            {
+                skipPreflight: false,
+                preflightCommitment: 'confirmed',
+            }
+        );
+
+        console.log("[Web3Auth] Transaction sent, signature:", signature);
 
         // Confirm transaction
         await connection.confirmTransaction({
-            signature: result.signature,
+            signature,
             blockhash,
             lastValidBlockHeight
-        });
+        }, 'confirmed');
 
-        return result.signature;
+        console.log("[Web3Auth] Transaction confirmed!");
+        return signature;
     } catch (error: any) {
         console.error("[Web3Auth] Transaction error:", error);
+
+        // Provide more helpful error messages
+        if (error?.message?.includes('0x1')) {
+            throw new Error("Insufficient SOL balance for transaction fee");
+        } else if (error?.message?.includes('0x0')) {
+            throw new Error("Transaction failed - please try again");
+        } else if (error?.message?.includes('blockhash')) {
+            throw new Error("Transaction expired - please try again");
+        }
+
         throw new Error(error?.message || "Transaction failed");
     }
 };
