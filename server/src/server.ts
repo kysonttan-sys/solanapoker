@@ -831,19 +831,93 @@ app.get('/api/referrals/:userId', async (req, res) => {
 
         const thisMonthEarnings = totalEarnings * 0.3; // Simplified - would filter by date
 
-        // Determine next rank requirements
-        const rank = user.referralRank || 0;
-        const requirements = [
-            { directs: 1, volume: 0 },    // Scout
-            { directs: 3, volume: 0 },    // Agent
-            { directs: 10, volume: 0 },   // Broker
-            { directs: 30, volume: 0 },   // Partner
-        ];
+        // Determine rank based on downline progression (MLM structure)
+        // Scout (0): Active Player (1+ Hand) - Default starting rank
+        // Agent (1): 3 Directs (1,000 Hands each)
+        // Broker (2): 3 Direct Agents
+        // Partner (3): 3 Direct Brokers
 
-        const nextRankRequirements = rank < 3 ? {
-            directsNeeded: Math.max(0, requirements[rank + 1].directs - stats.byLevel[1]),
-            volumeNeeded: 0
-        } : null;
+        let calculatedRank = 0; // Start as Scout
+
+        if (tree.length > 0) {
+            // Get direct referrals with detailed stats
+            const directRefs = await db.user.findMany({
+                where: { referredBy: user.referralCode || '' },
+                select: {
+                    id: true,
+                    username: true,
+                    totalHands: true,
+                    referralRank: true
+                }
+            });
+
+            // Count directs with 1000+ hands (for Agent rank)
+            const directsWith1000Hands = directRefs.filter(ref => ref.totalHands >= 1000).length;
+
+            // Count directs who are Agents (for Broker rank)
+            const directAgents = directRefs.filter(ref => ref.referralRank >= 1).length;
+
+            // Count directs who are Brokers (for Partner rank)
+            const directBrokers = directRefs.filter(ref => ref.referralRank >= 2).length;
+
+            // Determine rank based on criteria
+            if (directBrokers >= 3) {
+                calculatedRank = 3; // Partner
+            } else if (directAgents >= 3) {
+                calculatedRank = 2; // Broker
+            } else if (directsWith1000Hands >= 3) {
+                calculatedRank = 1; // Agent
+            } else {
+                calculatedRank = 0; // Scout
+            }
+        }
+
+        // Auto-update rank if changed
+        if (calculatedRank !== user.referralRank) {
+            await db.user.update({
+                where: { id: userId },
+                data: { referralRank: calculatedRank }
+            });
+        }
+
+        const rank = calculatedRank;
+
+        // Calculate next rank requirements
+        let nextRankRequirements = null;
+
+        if (rank < 3) {
+            const directRefs = await db.user.findMany({
+                where: { referredBy: user.referralCode || '' },
+                select: { totalHands: true, referralRank: true }
+            });
+
+            const directsWith1000Hands = directRefs.filter(ref => ref.totalHands >= 1000).length;
+            const directAgents = directRefs.filter(ref => ref.referralRank >= 1).length;
+            const directBrokers = directRefs.filter(ref => ref.referralRank >= 2).length;
+
+            if (rank === 0) {
+                // Scout → Agent: Need 3 directs with 1000+ hands
+                nextRankRequirements = {
+                    requirement: '3 Directs (1,000 Hands each)',
+                    directsNeeded: Math.max(0, 3 - directsWith1000Hands),
+                    currentProgress: directsWith1000Hands
+                };
+            } else if (rank === 1) {
+                // Agent → Broker: Need 3 Direct Agents
+                nextRankRequirements = {
+                    requirement: '3 Direct Agents',
+                    directsNeeded: Math.max(0, 3 - directAgents),
+                    currentProgress: directAgents
+                };
+            } else if (rank === 2) {
+                // Broker → Partner: Need 3 Direct Brokers
+                nextRankRequirements = {
+                    requirement: '3 Direct Brokers',
+                    directsNeeded: Math.max(0, 3 - directBrokers),
+                    currentProgress: directBrokers
+                };
+            }
+        }
 
         res.json({
             stats: {

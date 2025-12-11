@@ -14,8 +14,9 @@ interface ReferralStats {
     rank: number;
     rankName: string;
     nextRankRequirements: {
+        requirement: string;
         directsNeeded: number;
-        volumeNeeded: number;
+        currentProgress: number;
     } | null;
 }
 
@@ -201,7 +202,7 @@ export const ReferralDashboard: React.FC<{ userId: string }> = ({ userId }) => {
                     <div className="text-sm text-gray-400">Progress</div>
                     {stats.nextRankRequirements && (
                         <div className="text-xs text-yellow-300 mt-1">
-                            Need: {stats.nextRankRequirements.directsNeeded} directs
+                            {stats.nextRankRequirements.currentProgress}/{stats.nextRankRequirements.currentProgress + stats.nextRankRequirements.directsNeeded} - {stats.nextRankRequirements.requirement}
                         </div>
                     )}
                 </Card>
@@ -238,10 +239,10 @@ export const ReferralDashboard: React.FC<{ userId: string }> = ({ userId }) => {
                 <h3 className="text-lg font-bold text-white mb-4">Commission Structure</h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                     {[
-                        { rank: 'Scout', commission: '5%', color: 'gray', requirement: '1 direct' },
-                        { rank: 'Agent', commission: '10%', color: 'blue', requirement: '3 directs' },
-                        { rank: 'Broker', commission: '15%', color: 'purple', requirement: '10 directs' },
-                        { rank: 'Partner', commission: '20%', color: 'yellow', requirement: '30 directs' }
+                        { rank: 'Scout', commission: '5%', color: 'gray', requirement: 'Active Player (1+ Hand)' },
+                        { rank: 'Agent', commission: '10%', color: 'blue', requirement: '3 Directs (1,000 Hands each)' },
+                        { rank: 'Broker', commission: '15%', color: 'purple', requirement: '3 Direct Agents' },
+                        { rank: 'Partner', commission: '20%', color: 'yellow', requirement: '3 Direct Brokers' }
                     ].map((tier, idx) => (
                         <div
                             key={tier.rank}
@@ -290,7 +291,7 @@ export const ReferralDashboard: React.FC<{ userId: string }> = ({ userId }) => {
                     <p>• Share your referral link with friends</p>
                     <p>• Earn {[5, 10, 15, 20][stats.rank]}% commission every time they play poker</p>
                     <p>• Build a 3-level deep network (you earn from all levels!)</p>
-                    <p>• Rank up to Partner (20%) by referring 30+ direct players</p>
+                    <p>• Rank up by helping your team advance: Scout → Agent (3 active players) → Broker (3 Agents) → Partner (3 Brokers)</p>
                     <p>• Commissions paid instantly to your balance</p>
                 </div>
             </Card>

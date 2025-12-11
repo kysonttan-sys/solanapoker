@@ -71,39 +71,48 @@ Profile → Referrals Tab
 
 #### 3. **Rank Auto-Promotion Logic** ✅
 
-**Rank Requirements:**
-- **Scout (5%)**: 1+ direct referrals
-- **Agent (10%)**: 3+ direct referrals
-- **Broker (15%)**: 10+ direct referrals
-- **Partner (20%)**: 30+ direct referrals
+**MLM-Based Rank Requirements:**
+- **Scout (0) - 5%**: Active Player (1+ Hand) - Starting rank
+- **Agent (1) - 10%**: 3 Direct Referrals (1,000+ Hands each)
+- **Broker (2) - 15%**: 3 Direct Agents (referrals who are also Agents)
+- **Partner (3) - 20%**: 3 Direct Brokers (referrals who are also Brokers)
 
-**Promotion Process:**
-1. User gets new referral
-2. API calculates current direct referral count
-3. Checks against next rank requirements
-4. Dashboard shows progress (e.g., "Need: 2 more directs")
-5. When threshold met → Ready for promotion
-6. Admin can manually promote OR implement auto-promotion
+**Auto-Promotion System:**
+The API automatically calculates and updates ranks in real-time:
+1. User opens Referrals dashboard
+2. API queries direct referrals with their stats (totalHands, referralRank)
+3. Counts eligible referrals for each rank tier:
+   - `directsWith1000Hands` = directs with 1,000+ hands (for Agent)
+   - `directAgents` = directs with rank ≥ 1 (for Broker)
+   - `directBrokers` = directs with rank ≥ 2 (for Partner)
+4. Determines new rank based on criteria
+5. If rank changed → Updates database immediately
+6. Dashboard shows current rank and progress to next tier
 
-**Future Enhancement:**
-Add cron job to check and auto-promote users daily:
+**How It Works:**
 ```typescript
-// Auto-promotion logic (to be added)
-cron.schedule('0 0 * * *', async () => {
-  const users = await db.user.findMany();
-  for (const user of users) {
-    const directCount = await db.user.count({
-      where: { referredBy: user.referralCode }
-    });
-    const newRank = calculateRank(directCount);
-    if (newRank > user.referralRank) {
-      await db.user.update({
-        where: { id: user.id },
-        data: { referralRank: newRank }
-      });
-    }
-  }
+// Real-time rank calculation (server/src/server.ts lines 834-920)
+const directRefs = await db.user.findMany({
+    where: { referredBy: user.referralCode },
+    select: { totalHands: true, referralRank: true }
 });
+
+const directsWith1000Hands = directRefs.filter(ref => ref.totalHands >= 1000).length;
+const directAgents = directRefs.filter(ref => ref.referralRank >= 1).length;
+const directBrokers = directRefs.filter(ref => ref.referralRank >= 2).length;
+
+if (directBrokers >= 3) calculatedRank = 3; // Partner
+else if (directAgents >= 3) calculatedRank = 2; // Broker
+else if (directsWith1000Hands >= 3) calculatedRank = 1; // Agent
+else calculatedRank = 0; // Scout
+
+// Auto-update if changed
+if (calculatedRank !== user.referralRank) {
+    await db.user.update({
+        where: { id: userId },
+        data: { referralRank: calculatedRank }
+    });
+}
 ```
 
 #### 4. **Profile Integration** ✅
