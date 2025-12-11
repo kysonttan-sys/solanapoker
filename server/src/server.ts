@@ -883,7 +883,7 @@ app.get('/api/referrals/:userId', async (req, res) => {
         const rank = calculatedRank;
 
         // Calculate next rank requirements
-        let nextRankRequirements = null;
+        let nextRankRequirements: { requirement: string; directsNeeded: number; currentProgress: number } | null = null;
 
         if (rank < 3) {
             const directRefs = await db.user.findMany({
