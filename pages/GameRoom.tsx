@@ -5,20 +5,18 @@ import { ArrowLeft, Settings, Volume2, VolumeX, ShieldCheck, WifiOff, Wifi, Menu
 import { Table } from '../components/poker/Table';
 import { GameControls } from '../components/poker/GameControls';
 import { BuyInModal } from '../components/BuyInModal';
-import { TournamentInfoModal } from '../components/TournamentInfoModal';
 import { FairnessModal } from '../components/FairnessModal';
 import { CaptchaModal } from '../components/ui/CaptchaModal';
-import { ChatBox } from '../components/ChatBox'; 
+import { ChatBox } from '../components/ChatBox';
 import { Button } from '../components/ui/Button';
 import { GameState } from '../utils/pokerGameLogic';
 import { generateSeed } from '../utils/fairness';
 import { playGameSound, initAudio, setAudioEnabled } from '../utils/audio';
-import { PokerTable, Tournament, User, GameType } from '../types';
+import { PokerTable, User, GameType } from '../types';
 import { useSocket } from '../hooks/useSocket';
 
 interface GameRoomProps {
   tables: PokerTable[];
-  tournaments: Tournament[];
   user: User | null;
   onVerify: () => void;
   onBalanceUpdate: (balance: number) => void;
@@ -27,7 +25,7 @@ interface GameRoomProps {
 // Strict State Machine for Joining Process
 type JoinPhase = 'idle' | 'verifying' | 'buying-in' | 'joining';
 
-export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, onVerify, onBalanceUpdate }) => {
+export const GameRoom: React.FC<GameRoomProps> = ({ tables, user, onVerify, onBalanceUpdate }) => {
   const { tableId } = useParams<{ tableId: string }>();
   const navigate = useNavigate();
   const { socket, isConnected, status } = useSocket();
@@ -40,8 +38,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
 
   // --- GAME DATA ---
   const tableData = tables.find(t => t.id === tableId);
-  const tournamentData = tournaments.find(t => t.id === tableId);
-  const gameData = tableData || tournamentData;
+  const gameData = tableData;
 
   // --- STATE ---
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -55,7 +52,6 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
 
   // UI Toggles
   const [isFairnessOpen, setIsFairnessOpen] = useState(false);
-  const [isTournamentInfoOpen, setIsTournamentInfoOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(true);
   
@@ -101,7 +97,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
         maxSeats: gameData.seats ? parseInt(String(gameData.seats), 10) : 6,
         smallBlind: 'smallBlind' in gameData ? Number(gameData.smallBlind) : 50,
         bigBlind: 'bigBlind' in gameData ? Number(gameData.bigBlind) : 100,
-        gameMode: gameData.id.startsWith('tour') ? 'tournament' : (gameData as PokerTable).type === GameType.FUN ? 'fun' : 'cash'
+        gameMode: (gameData as PokerTable).type === GameType.FUN ? 'fun' : 'cash'
     } : {};
 
     // 1. Join Room as Spectator
@@ -153,12 +149,39 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
         setJoinPhase('idle');
     });
 
+    // 5. Listen for Balance Updates (when joining/leaving table)
+    socket.on('balanceUpdate', (newBalance: number) => {
+        console.log('[GameRoom] Balance update received:', newBalance);
+        if (onBalanceUpdate) {
+            onBalanceUpdate(newBalance);
+        }
+    });
+
+    // 6. Listen for Full User Profile Updates (totalHands, VIP rank, etc.)
+    socket.on('userProfileUpdate', (updatedUser: any) => {
+        console.log('[GameRoom] Full profile update received:', updatedUser);
+        if (user && user.id === updatedUser.id) {
+            // Update localStorage with fresh data
+            localStorage.setItem(`solpoker_user_${user.walletAddress}`, JSON.stringify({
+                ...user,
+                ...updatedUser
+            }));
+
+            // Notify parent to update global state
+            if (onBalanceUpdate && updatedUser.balance !== undefined) {
+                onBalanceUpdate(updatedUser.balance);
+            }
+        }
+    });
+
     return () => {
         socket.off('gameStateUpdate');
         socket.off('newChatMessage');
         socket.off('error');
+        socket.off('balanceUpdate');
+        socket.off('userProfileUpdate');
     };
-  }, [socket, isConnected, tableId, user, isMuted, gameData, joinPhase]);
+  }, [socket, isConnected, tableId, user, isMuted, gameData, joinPhase, onBalanceUpdate]);
 
   // --- STRICT JOIN FLOW HANDLERS ---
 
@@ -459,12 +482,12 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
 
         {/* 2. Buy In */}
         {user && (
-            <BuyInModal 
-                isOpen={joinPhase === 'buying-in'} 
+            <BuyInModal
+                isOpen={joinPhase === 'buying-in'}
                 onClose={cancelJoin}
                 onConfirm={handleBuyInConfirmed}
-                min={gameState.gameMode === 'cash' ? (tableData?.buyInMin || gameState.bigBlind * 50) : (tournamentData?.buyIn || 100)}
-                max={gameState.gameMode === 'cash' ? (tableData?.buyInMax || gameState.bigBlind * 100) : (tournamentData?.buyIn || 100)}
+                min={tableData?.buyInMin || gameState.bigBlind * 50}
+                max={tableData?.buyInMax || gameState.bigBlind * 100}
                 balance={user.balance}
                 bigBlind={gameState.bigBlind}
                 isDepositing={false}
@@ -472,18 +495,11 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, tournaments, user, o
         )}
 
         {/* Info Modals */}
-        <FairnessModal 
-            isOpen={isFairnessOpen} 
-            onClose={() => setIsFairnessOpen(false)} 
+        <FairnessModal
+            isOpen={isFairnessOpen}
+            onClose={() => setIsFairnessOpen(false)}
             gameState={gameState}
             onUpdateClientSeed={(s) => setClientSeed(s)}
-        />
-
-        <TournamentInfoModal 
-            isOpen={isTournamentInfoOpen} 
-            onClose={() => setIsTournamentInfoOpen(false)} 
-            tournamentDetails={gameState.tournamentDetails}
-            startTime={tournamentData?.startTime}
         />
 
     </div>

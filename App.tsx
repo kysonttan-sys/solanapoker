@@ -25,8 +25,8 @@ import { CookieConsent } from './components/CookieConsent';
 import { TurnDeviceOverlay } from './components/TurnDeviceOverlay';
 import { TestnetDisclaimer } from './components/TestnetDisclaimer';
 import { WalletContextProvider, useWallet, useConnection } from './components/WalletContextProvider';
-import { MOCK_USER, MOCK_TABLES, MOCK_TOURNAMENTS, ADMIN_WALLET_ADDRESS } from './constants';
-import { User, GameType, PokerTable, Tournament } from './types';
+import { MOCK_USER, MOCK_TABLES, ADMIN_WALLET_ADDRESS } from './constants';
+import { User, GameType, PokerTable } from './types';
 import { Twitter, Facebook, Instagram, Music, Send, Radio } from 'lucide-react';
 import { getApiUrl } from './utils/api';
 
@@ -151,8 +151,7 @@ const AppContent: React.FC = () => {
 
   // Data State (Lifted from constants to allow updates)
   const [tables, setTables] = useState<PokerTable[]>([]);
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  
+
   // Fetch live tables from backend
   useEffect(() => {
     const fetchTables = async () => {
@@ -169,33 +168,10 @@ const AppContent: React.FC = () => {
         setTables(MOCK_TABLES);
       }
     };
-    
+
     fetchTables();
     // Refresh tables every 5 seconds
     const interval = setInterval(fetchTables, 5000);
-    return () => clearInterval(interval);
-  }, []);
-  
-  // Fetch live tournaments from backend
-  useEffect(() => {
-    const fetchTournaments = async () => {
-      try {
-        const response = await fetch(`${getApiUrl()}/api/tournaments`);
-        if (response.ok) {
-          const data = await response.json();
-          setTournaments(data);
-          console.log('[App] Live tournaments loaded:', data.length);
-        }
-      } catch (error) {
-        console.error('[App] Failed to fetch tournaments:', error);
-        // Fallback to mock data on error
-        setTournaments(MOCK_TOURNAMENTS);
-      }
-    };
-    
-    fetchTournaments();
-    // Refresh tournaments every 5 seconds
-    const interval = setInterval(fetchTournaments, 5000);
     return () => clearInterval(interval);
   }, []);
   
@@ -245,12 +221,10 @@ const AppContent: React.FC = () => {
       navigate(`/game/${gameId}?join=true`);
   };
 
-  const handleGameCreated = (newGame: PokerTable | Tournament, type: GameType) => {
-    if (type === GameType.CASH || type === GameType.FUN) {
-        setTables(prev => [newGame as PokerTable, ...prev]);
-    } else {
-        setTournaments(prev => [newGame as Tournament, ...prev]);
-    }
+  const handleGameCreated = (newGame: PokerTable, type: GameType) => {
+    // Only Cash and Fun games supported now (tournaments removed)
+    setTables(prev => [newGame, ...prev]);
+    setCreateModalOpen(false);
   };
 
   return (
@@ -274,27 +248,25 @@ const AppContent: React.FC = () => {
         
         <main className={`flex-grow w-full ${window.location.hash.includes('game') ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'}`}>
           <Routes>
-            <Route 
-                path="/" 
+            <Route
+                path="/"
                 element={
-                    <Home 
+                    <Home
                         onCreateGame={openCreateModal}
                         onJoinGame={handleJoinGame}
                         tables={tables}
-                        tournaments={tournaments}
                     />
-                } 
+                }
             />
-            <Route 
-                path="/lobby" 
+            <Route
+                path="/lobby"
                 element={
-                    <Lobby 
-                        onCreateGame={openCreateModal} 
+                    <Lobby
+                        onCreateGame={openCreateModal}
                         onJoinGame={handleJoinGame}
                         tables={tables}
-                        tournaments={tournaments}
                     />
-                } 
+                }
             />
             <Route path="/swap" element={<Swap user={user} />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
@@ -317,9 +289,9 @@ const AppContent: React.FC = () => {
               path="/profile/:userId" 
               element={user ? <Profile currentUser={user} onUpdateUser={handleUserUpdate} /> : <Navigate to="/" replace />} 
             />
-            <Route 
-              path="/game/:tableId" 
-              element={<GameRoom tables={tables} tournaments={tournaments} user={user} onVerify={handleVerification} onBalanceUpdate={handleBalanceUpdate} />} 
+            <Route
+              path="/game/:tableId"
+              element={<GameRoom tables={tables} user={user} onVerify={handleVerification} onBalanceUpdate={handleBalanceUpdate} />}
             />
             
             {/* Admin Route - Let Admin component handle loading/auth */}
@@ -427,10 +399,10 @@ const AppContent: React.FC = () => {
             } />
         </Routes>
 
-        {/* NETWORK INDICATOR */}
-        <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-sol-blue/50 shadow-lg pointer-events-none">
-            <Radio size={12} className="text-sol-blue animate-pulse" />
-            <span className="text-[10px] font-bold text-sol-blue uppercase tracking-widest">Devnet Live (1 SOL = 100k USDT)</span>
+        {/* NETWORK INDICATOR - Top Right, Transparent */}
+        <div className="fixed top-24 right-4 z-40 flex items-center gap-2 bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-full border border-sol-blue/30 shadow-md pointer-events-none opacity-50 hover:opacity-80 transition-opacity">
+            <Radio size={10} className="text-sol-blue animate-pulse" />
+            <span className="text-[9px] font-bold text-sol-blue uppercase tracking-wider">Devnet</span>
         </div>
       </div>
   );

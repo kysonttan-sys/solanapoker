@@ -143,7 +143,7 @@ Player Action → Frontend → Socket.io → Game Manager → Poker Engine
 #### 9. **Implemented Rake Distribution System**
 - **Features:**
   - VIP-based rake calculation (3-5% with caps)
-  - 6-way distribution: Host, Referrer, Jackpot, Global Pool, Developer
+  - 5-way distribution: Host, Referrer, Jackpot, Global Pool, Developer
   - Database audit trail with `RakeDistribution` model
 - **Files:** 
   - `server/src/utils/pokerGameLogic.ts` (calculateRake, distributeRake)

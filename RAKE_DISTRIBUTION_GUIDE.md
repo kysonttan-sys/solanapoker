@@ -1,7 +1,7 @@
 # 🎰 Complete Rake Distribution System
 
 ## Overview
-Your Solana Poker platform has a comprehensive 6-way rake distribution system with automatic distributions for Global Partner Pool and Monthly Jackpot.
+Your Solana Poker platform has a comprehensive 5-way rake distribution system with automatic distributions for Global Partner Pool and Monthly Jackpot.
 
 ---
 

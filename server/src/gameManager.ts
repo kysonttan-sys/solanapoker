@@ -29,19 +29,74 @@ export class GameManager {
                     }
                 }
             }
-            
+
             await db.systemState.upsert({
                 where: { id: 'global' },
-                create: { 
+                create: {
                     id: 'global',
                     activePlayers: uniquePlayers.size
                 },
-                update: { 
+                update: {
                     activePlayers: uniquePlayers.size
                 }
             });
         } catch (e) {
             console.error('[GameManager] Failed to update active players count:', e);
+        }
+    }
+
+    // Emit updated user profile to all connected sockets for that user
+    private async emitUserProfileUpdate(userId: string) {
+        try {
+            if (userId.startsWith('bot_')) return; // Skip bots
+
+            const user = await db.user.findUnique({
+                where: { id: userId },
+                select: {
+                    id: true,
+                    username: true,
+                    walletAddress: true,
+                    balance: true,
+                    totalHands: true,
+                    totalWinnings: true,
+                    vipRank: true,
+                    referralRank: true,
+                    referralCode: true,
+                    referredBy: true,
+                    avatarUrl: true
+                }
+            });
+
+            if (!user) {
+                console.warn(`[ProfileSync] User ${userId} not found in DB`);
+                return;
+            }
+
+            // Find all sockets for this user across all tables
+            const userSockets: Socket[] = [];
+            for (const table of this.tables.values()) {
+                for (const player of table.players) {
+                    if (player.id === userId && player.socketId) {
+                        const socket = this.io.sockets.sockets.get(player.socketId);
+                        if (socket && !userSockets.includes(socket)) {
+                            userSockets.push(socket);
+                        }
+                    }
+                }
+            }
+
+            // Emit to all found sockets
+            for (const socket of userSockets) {
+                socket.emit('userProfileUpdate', user);
+                console.log(`[ProfileSync] 📤 Emitted profile update to socket ${socket.id} for user ${user.username}`);
+            }
+
+            // Also emit balance update for backward compatibility
+            for (const socket of userSockets) {
+                socket.emit('balanceUpdate', user.balance);
+            }
+        } catch (error) {
+            console.error(`[ProfileSync] Error emitting profile update:`, error);
         }
     }
 
@@ -140,10 +195,12 @@ export class GameManager {
             return socket.emit('error', { message: 'Seat taken' });
         }
 
+        const isFunGame = table.gameMode === 'fun';
+
         try {
             const dbUser = await db.user.findUnique({ where: { id: user.id } });
             console.log(`[handleSit] DB User lookup for ${user.id}:`, dbUser ? { balance: dbUser.balance } : 'NOT FOUND');
-            
+
             if (!dbUser) {
                 console.log(`[handleSit] User ${user.id} not found in database, creating...`);
                 // Create user if they don't exist (for social login users)
@@ -152,37 +209,52 @@ export class GameManager {
                         id: user.id,
                         walletAddress: user.id,
                         username: user.name || user.username || 'Player',
-                        balance: 0
+                        balance: isFunGame ? 0 : 0 // Fun games don't need balance
                     }
                 });
-                return socket.emit('error', { message: 'Please deposit funds first. Your balance is 0.' });
-            }
-            
-            if (dbUser.balance < amount) {
-                console.log(`[handleSit] Insufficient funds: has ${dbUser.balance}, needs ${amount}`);
-                return socket.emit('error', { message: `Insufficient funds. You have ${dbUser.balance.toLocaleString()} chips but need ${amount.toLocaleString()}.` });
+
+                if (!isFunGame) {
+                    return socket.emit('error', { message: 'Please deposit funds first. Your balance is 0.' });
+                }
             }
 
-            // Note: Blockchain balance verification is handled client-side
+            // For fun games, skip balance check and transactions
+            if (!isFunGame) {
+                if (dbUser && dbUser.balance < amount) {
+                    console.log(`[handleSit] Insufficient funds: has ${dbUser.balance}, needs ${amount}`);
+                    return socket.emit('error', { message: `Insufficient funds. You have ${dbUser.balance.toLocaleString()} chips but need ${amount.toLocaleString()}.` });
+                }
 
-            // DB Transaction - Deduct buy-in from off-chain balance
-            const [updatedUser] = await db.$transaction([
-                db.user.update({
-                    where: { id: user.id },
-                    data: { balance: { decrement: amount } }
-                }),
-                db.transaction.create({
-                    data: {
-                        userId: user.id,
-                        type: 'GAME_BUYIN',
-                        amount: -amount,
-                        status: 'COMPLETED'
-                    }
-                })
-            ]);
-            
-            console.log(`[handleSit] Buy-in successful: ${amount} chips, new balance: ${updatedUser.balance}`);
-            socket.emit('balanceUpdate', updatedUser.balance);
+                // Note: Blockchain balance verification is handled client-side
+
+                // DB Transaction - Deduct buy-in from off-chain balance (CASH games only)
+                const [updatedUser] = await db.$transaction([
+                    db.user.update({
+                        where: { id: user.id },
+                        data: { balance: { decrement: amount } }
+                    }),
+                    db.transaction.create({
+                        data: {
+                            userId: user.id,
+                            type: 'GAME_BUYIN',
+                            amount: -amount,
+                            status: 'COMPLETED'
+                        }
+                    })
+                ]);
+
+                console.log(`[handleSit] Buy-in successful: ${amount} chips, new balance: ${updatedUser.balance}`);
+                socket.emit('balanceUpdate', updatedUser.balance);
+
+                // Emit full profile update to sync all user data
+                await this.emitUserProfileUpdate(user.id);
+            } else {
+                console.log(`[handleSit] Fun game - skipping balance deduction. Player gets ${amount} free chips.`);
+                // For fun games, just emit current balance (unchanged)
+                if (dbUser) {
+                    socket.emit('balanceUpdate', dbUser.balance);
+                }
+            }
 
         } catch (e: any) {
             console.error(`[handleSit] Transaction error:`, e);
@@ -471,19 +543,27 @@ export class GameManager {
         } catch(e) { console.error('SystemState Update Error', e); }
 
         // Process each winner - update balances and record transactions
+        const isFunGame = table.gameMode === 'fun';
+
         for (const winner of newState.winners) {
             // Skip bots - they don't have DB records
             if (winner.playerId.startsWith('bot_')) {
                 console.log(`[Win] Bot ${winner.playerId} won $${winner.amount} (not saved to DB)`);
                 continue;
             }
-            
+
+            // Skip database updates for fun games
+            if (isFunGame) {
+                console.log(`[Win] Fun game - Player ${winner.playerId} won $${winner.amount} (not saved to DB)`);
+                continue;
+            }
+
             try {
                 // Build transaction array
                 const dbOps: any[] = [
                     db.user.update({
                         where: { id: winner.playerId },
-                        data: { 
+                        data: {
                             balance: { increment: winner.amount },
                             totalWinnings: { increment: winner.amount },
                             totalHands: { increment: 1 }
@@ -499,16 +579,19 @@ export class GameManager {
                         }
                     })
                 ];
-                
+
                 // Only save hand history if we have valid handToSave data
                 if (handToSave) {
                     dbOps.push(db.hand.create({ data: handToSave }));
                 }
-                
+
                 await db.$transaction(dbOps);
                 console.log(`[Win] Player ${winner.playerId} won $${winner.amount} - saved to DB`);
-            } catch(e) { 
-                console.error('DB Update Error on Win:', e); 
+
+                // Emit full profile update to sync totalHands, totalWinnings, VIP rank, etc.
+                await this.emitUserProfileUpdate(winner.playerId);
+            } catch(e) {
+                console.error('DB Update Error on Win:', e);
             }
         }
 
@@ -578,15 +661,17 @@ export class GameManager {
             const player = table.players.find((p: any) => p.socketId === socket.id);
             if (player) {
                 console.log(`[Disconnect] Player ${player.name} (${player.id}) leaving table ${tableId} with balance: ${player.balance}`);
-                
-                // Return table chips to database balance
-                if (player.balance > 0 && !player.id.startsWith('bot_')) {
+
+                const isFunGame = table.gameMode === 'fun';
+
+                // Return table chips to database balance (skip for fun games)
+                if (player.balance > 0 && !player.id.startsWith('bot_') && !isFunGame) {
                     try {
                         const updatedUser = await db.user.update({
                             where: { id: player.id },
                             data: { balance: { increment: player.balance } }
                         });
-                        
+
                         // Log the cashout transaction
                         await db.transaction.create({
                             data: {
@@ -596,20 +681,29 @@ export class GameManager {
                                 status: 'COMPLETED'
                             }
                         });
-                        
+
                         console.log(`[Disconnect] ✅ Returned ${player.balance} chips to ${player.name}. New DB balance: ${updatedUser.balance}`);
+
+                        // Emit balance update to the user's socket immediately
+                        socket.emit('balanceUpdate', updatedUser.balance);
+                        console.log(`[Disconnect] 📤 Emitted balanceUpdate: ${updatedUser.balance} to socket ${socket.id}`);
+
+                        // Emit full profile update to sync all user data
+                        await this.emitUserProfileUpdate(player.id);
                     } catch (error) {
                         console.error(`[Disconnect] ❌ Failed to return balance to ${player.id}:`, error);
                     }
+                } else if (isFunGame) {
+                    console.log(`[Disconnect] Fun game - no balance return needed for ${player.name}`);
                 }
-                
+
                 const updatedTable = {
                     ...table,
                     players: table.players.filter(p => p.id !== player.id)
                 };
                 this.tables.set(tableId, updatedTable);
                 this.broadcastState(tableId);
-                
+
                 // Update active players count in database
                 this.updateActivePlayersCount();
             }

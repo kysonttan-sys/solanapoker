@@ -10,7 +10,6 @@ import validator from 'validator';
 import { GameManager } from './gameManager';
 import { db } from './db';
 import { distributionManager } from './distributionManager';
-import { tournamentManager } from './tournamentManager';
 
 // Global error handlers
 process.on('uncaughtException', (err) => {
@@ -948,115 +947,8 @@ app.get('/api/tables', (req, res) => {
 });
 
 // ===============================
-// TOURNAMENT ENDPOINTS
+// TOURNAMENT ENDPOINTS - REMOVED (Feature not ready)
 // ===============================
-
-// Get active tournaments
-app.get('/api/tournaments', async (req, res) => {
-    try {
-        const tournaments = await tournamentManager.getActiveTournaments();
-
-        // Transform database tournaments to match frontend Tournament type
-        const formattedTournaments = tournaments.map(t => {
-            const players = JSON.parse(t.players ?? '[]');
-            return {
-                id: t.id,
-                name: t.name,
-                buyIn: t.buyIn,
-                prizePool: t.prizePool,
-                seats: t.maxSeats,
-                maxPlayers: t.maxPlayers,
-                registeredPlayers: t.registeredCount,
-                status: t.status,
-                startTime: t.startTime?.toISOString(),
-                speed: 'REGULAR', // Default
-                smallBlind: t.smallBlind,
-                bigBlind: t.bigBlind
-            };
-        });
-
-        res.json(formattedTournaments);
-    } catch (error) {
-        console.error('[API] Error fetching tournaments:', error);
-        res.status(500).json({ error: 'Failed to fetch tournaments' });
-    }
-});
-
-// Get specific tournament
-app.get('/api/tournaments/:id', async (req, res) => {
-    try {
-        const tournament = await tournamentManager.getTournament(req.params.id);
-        if (!tournament) {
-            return res.status(404).json({ error: 'Tournament not found' });
-        }
-        res.json(tournament);
-    } catch (error) {
-        console.error('[API] Error fetching tournament:', error);
-        res.status(500).json({ error: 'Failed to fetch tournament' });
-    }
-});
-
-// Create tournament
-app.post('/api/tournaments', async (req, res) => {
-    try {
-        const { name, buyIn, maxPlayers, minPlayers, maxSeats, startingChips, smallBlind, bigBlind, creatorId } = req.body;
-
-        const tournament = await tournamentManager.createTournament({
-            name,
-            buyIn,
-            maxPlayers: maxPlayers || 9,
-            minPlayers: minPlayers || 6,
-            maxSeats: maxSeats || 9,
-            startingChips: startingChips || 10000,
-            smallBlind: smallBlind || 50,
-            bigBlind: bigBlind || 100,
-            creatorId
-        });
-
-        res.json({ success: true, tournament });
-    } catch (error) {
-        console.error('[API] Error creating tournament:', error);
-        res.status(500).json({ error: 'Failed to create tournament' });
-    }
-});
-
-// Register for tournament
-app.post('/api/tournaments/:id/register', async (req, res) => {
-    try {
-        const { userId, username } = req.body;
-
-        if (!userId || !username) {
-            return res.status(400).json({ error: 'userId and username required' });
-        }
-
-        const result = await tournamentManager.registerPlayer(req.params.id, userId, username);
-
-        if (!result.success) {
-            return res.status(400).json({ error: result.message });
-        }
-
-        res.json(result);
-    } catch (error) {
-        console.error('[API] Error registering for tournament:', error);
-        res.status(500).json({ error: 'Failed to register for tournament' });
-    }
-});
-
-// Start tournament manually (for testing/admin)
-app.post('/api/tournaments/:id/start', async (req, res) => {
-    try {
-        const result = await tournamentManager.startTournament(req.params.id);
-
-        if (!result.success) {
-            return res.status(400).json({ error: result.message });
-        }
-
-        res.json(result);
-    } catch (error) {
-        console.error('[API] Error starting tournament:', error);
-        res.status(500).json({ error: 'Failed to start tournament' });
-    }
-});
 
 // 5. Current fairness state — returns current hand fairness data
 app.get('/api/proof/:tableId/current', (req, res) => {

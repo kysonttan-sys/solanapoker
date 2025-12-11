@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
-import { GameType, Speed, PokerTable, Tournament } from '../types';
+import { GameType, Speed, PokerTable } from '../types';
 import { Coins, TrendingUp, Info, PieChart, Crown, Gift, Layers, Globe, Zap, Smile, Lock, Key, Calculator } from 'lucide-react';
 import { getHostStatus, MOCK_USER, PROTOCOL_FEE_SPLIT } from '../constants'; // Importing Mock User for demo state
 import { getApiUrl } from '../utils/api';
@@ -12,7 +12,7 @@ interface CreateGameModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultType: GameType;
-  onGameCreated: (game: PokerTable | Tournament, type: GameType) => void;
+  onGameCreated: (game: PokerTable, type: GameType) => void;
 }
 
 export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClose, defaultType, onGameCreated }) => {
@@ -38,38 +38,12 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
   // Standard Rake Cap (Fixed)
   const defaultRakeCap = 5;
 
-  // Tournament specific
-  const [entryFee, setEntryFee] = useState('');
-  const [tournamentFeePercent, setTournamentFeePercent] = useState('10'); // Default 10%
-  const [guaranteedPrize, setGuaranteedPrize] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [maxPlayers, setMaxPlayers] = useState('100');
-  const [winnersCount, setWinnersCount] = useState('15');
-  const [distribution, setDistribution] = useState('Standard');
-  const [startingChips, setStartingChips] = useState('10000');
-
   // Logic for Host Rank (Using Mock User for Demo context)
   const currentHostStatus = getHostStatus(MOCK_USER.ecosystemStats?.totalHostRevenueGenerated || 0);
   const hostShare = currentHostStatus.share;
   
   // Revenue Projection State
   const [projectedEarnings, setProjectedEarnings] = useState(0);
-
-  // Auto-Adjust Winners Count based on Max Players
-  useEffect(() => {
-      const max = parseInt(maxPlayers) || 0;
-      const winners = parseInt(winnersCount) || 0;
-      
-      // If winners count exceeds players, or is unrealistically high/low
-      if (max > 0) {
-          // Default to ~15% of field
-          const optimalWinners = Math.max(1, Math.floor(max * 0.15));
-          
-          if (winners > max || winners === 0 || (max < 20 && winners > 3)) {
-              setWinnersCount(optimalWinners.toString());
-          }
-      }
-  }, [maxPlayers]);
 
   // Update Revenue Projection
   useEffect(() => {
@@ -80,55 +54,43 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
 
       let estimatedRevenue = 0;
 
-      if (type === GameType.CASH) {
-          // 1. Hands Per Hour Estimation based on Speed AND Seats
-          // 6-max is faster than 9-max due to fewer players acting.
-          let handsPerHour = 0;
+      // Only CASH games now (tournament removed)
+      // 1. Hands Per Hour Estimation based on Speed AND Seats
+      // 6-max is faster than 9-max due to fewer players acting.
+      let handsPerHour = 0;
 
-          if (seats === 6) {
-              if (speed === Speed.REGULAR) handsPerHour = 60;
-              else if (speed === Speed.TURBO) handsPerHour = 90;
-              else if (speed === Speed.HYPER) handsPerHour = 140;
-          } else {
-              // 9-Max is slower
-              if (speed === Speed.REGULAR) handsPerHour = 45;
-              else if (speed === Speed.TURBO) handsPerHour = 70;
-              else if (speed === Speed.HYPER) handsPerHour = 100;
-          }
-
-          const sb = parseFloat(smallBlindInput) || 0;
-          const bb = sb * 2;
-
-          // 2. Average Pot Estimation based on Stack Depth (Buy-in)
-          // Deeper stacks = Larger average pots (implied odds, larger bluffs)
-          const minBuyIn = bb * (parseFloat(minBuyInBB) || 50);
-          const maxBuyIn = bb * (parseFloat(maxBuyInBB) || 100);
-          const avgStack = (minBuyIn + maxBuyIn) / 2;
-          
-          // Heuristic: Average pot is roughly 10% of the average stack in play
-          // (Includes small pots, folded blinds, and massive all-ins averaged out)
-          const avgPot = avgStack * 0.10; 
-
-          // 3. Rake Calculation (3% capped at $5)
-          const rakePerHand = Math.min(avgPot * 0.03, defaultRakeCap);
-          
-          const hourlyTableRevenue = rakePerHand * handsPerHour; 
-          estimatedRevenue = hourlyTableRevenue * (hostShare / 100);
+      if (seats === 6) {
+          if (speed === Speed.REGULAR) handsPerHour = 60;
+          else if (speed === Speed.TURBO) handsPerHour = 90;
+          else if (speed === Speed.HYPER) handsPerHour = 140;
       } else {
-          // Calculation: Total Fees Collected * Host Share
-          // Total Fees = (BuyIn * Players) * Fee%
-          const buyInVal = parseFloat(entryFee) || 0;
-          const playersVal = parseInt(maxPlayers) || 100;
-          const feePct = parseFloat(tournamentFeePercent) / 100;
-          
-          const totalVolume = buyInVal * playersVal;
-          const totalFees = totalVolume * feePct; 
-          
-          estimatedRevenue = totalFees * (hostShare / 100);
+          // 9-Max is slower
+          if (speed === Speed.REGULAR) handsPerHour = 45;
+          else if (speed === Speed.TURBO) handsPerHour = 70;
+          else if (speed === Speed.HYPER) handsPerHour = 100;
       }
 
+      const sb = parseFloat(smallBlindInput) || 0;
+      const bb = sb * 2;
+
+      // 2. Average Pot Estimation based on Stack Depth (Buy-in)
+      // Deeper stacks = Larger average pots (implied odds, larger bluffs)
+      const minBuyIn = bb * (parseFloat(minBuyInBB) || 50);
+      const maxBuyIn = bb * (parseFloat(maxBuyInBB) || 100);
+      const avgStack = (minBuyIn + maxBuyIn) / 2;
+
+      // Heuristic: Average pot is roughly 10% of the average stack in play
+      // (Includes small pots, folded blinds, and massive all-ins averaged out)
+      const avgPot = avgStack * 0.10;
+
+      // 3. Rake Calculation (3% capped at $5)
+      const rakePerHand = Math.min(avgPot * 0.03, defaultRakeCap);
+
+      const hourlyTableRevenue = rakePerHand * handsPerHour;
+      estimatedRevenue = hourlyTableRevenue * (hostShare / 100);
+
       setProjectedEarnings(estimatedRevenue);
-  }, [type, smallBlindInput, entryFee, maxPlayers, tournamentFeePercent, hostShare, speed, minBuyInBB, maxBuyInBB, seats]);
+  }, [type, smallBlindInput, hostShare, speed, minBuyInBB, maxBuyInBB, seats]);
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -136,101 +98,43 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
     setIsCreating(true);
 
     try {
-        if (type === GameType.CASH || type === GameType.FUN) {
-            let sb = parseFloat(smallBlindInput) || 0;
-            let bb = sb * 2;
+        let sb = parseFloat(smallBlindInput) || 0;
+        let bb = sb * 2;
 
-            // Calculate actual buy-in limits based on BB multipliers
-            let buyInMinVal = bb * (parseFloat(minBuyInBB) || 50);
-            let buyInMaxVal = bb * (parseFloat(maxBuyInBB) || 100);
+        // Calculate actual buy-in limits based on BB multipliers
+        let buyInMinVal = bb * (parseFloat(minBuyInBB) || 50);
+        let buyInMaxVal = bb * (parseFloat(maxBuyInBB) || 100);
 
-            // FUN MODE: Multiplier for blinds
-            if (type === GameType.FUN) {
-                sb *= 100;
-                bb *= 100;
-                buyInMinVal = bb * 100;
-                buyInMaxVal = bb * 100;
-            }
+        // FUN MODE: Multiplier for blinds
+        if (type === GameType.FUN) {
+            sb *= 100;
+            bb *= 100;
+            buyInMinVal = bb * 100;
+            buyInMaxVal = bb * 100;
+        }
 
-            const newTable: PokerTable = {
-                id: `table_${Date.now()}`,
-                name,
-                smallBlind: sb,
-                bigBlind: bb,
-                seats,
-                occupiedSeats: 0, // Starts empty
-                buyInMin: buyInMinVal,
-                buyInMax: buyInMaxVal,
-                speed,
-                rakeCap: type === GameType.FUN ? 0 : defaultRakeCap,
-                type: type,
-                creatorId: publicKey?.toBase58() || MOCK_USER.id,
-                isPrivate,
-                password: isPrivate ? password : undefined
-            };
-            onGameCreated(newTable, type);
+        const newTable: PokerTable = {
+            id: `table_${Date.now()}`,
+            name,
+            smallBlind: sb,
+            bigBlind: bb,
+            seats,
+            occupiedSeats: 0, // Starts empty
+            buyInMin: buyInMinVal,
+            buyInMax: buyInMaxVal,
+            speed,
+            rakeCap: type === GameType.FUN ? 0 : defaultRakeCap,
+            type: type,
+            creatorId: publicKey?.toBase58() || MOCK_USER.id,
+            isPrivate,
+            password: isPrivate ? password : undefined
+        };
+        onGameCreated(newTable, type);
 
-            if (type === GameType.FUN) {
-                 alert(`Fun Table "${name}" Created!\n\nType: Play Money\nBlinds: ${sb}/${bb}\nStart Chips: ${buyInMinVal} (100bb Auto)`);
-            } else {
-                 alert(`Cash Game "${name}" Created!\n\nRake: 3% (Cap $${defaultRakeCap})\nYour Share: ${hostShare}% (${currentHostStatus.name})`);
-            }
+        if (type === GameType.FUN) {
+             alert(`Fun Table "${name}" Created!\n\nType: Play Money (Free)\nBlinds: ${sb}/${bb}\nStart Chips: ${buyInMinVal} (100bb Auto)\n\nNo deposits required - just for fun!`);
         } else {
-            // Tournament: Call API to create in database
-            const sb = parseFloat(smallBlindInput) || 50;
-            const bb = sb * 2;
-
-            const tournamentData = {
-                name,
-                buyIn: parseFloat(entryFee) || 0,
-                maxPlayers: parseInt(maxPlayers) || 9,
-                minPlayers: Math.max(2, Math.ceil(parseInt(maxPlayers) * 0.3)), // Min 30% of max players
-                maxSeats: seats,
-                startingChips: parseInt(startingChips) || 10000,
-                smallBlind: sb,
-                bigBlind: bb,
-                creatorId: publicKey?.toBase58() || MOCK_USER.id
-            };
-
-            const response = await fetch(`${getApiUrl()}/api/tournaments`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(tournamentData)
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to create tournament');
-            }
-
-            const result = await response.json();
-            const tournament = result.tournament;
-
-            // Format for frontend
-            const newTourney: Tournament = {
-                id: tournament.id,
-                name: tournament.name,
-                buyIn: tournament.buyIn,
-                prizePool: tournament.prizePool,
-                registeredPlayers: tournament.registeredCount,
-                maxPlayers: tournament.maxPlayers,
-                startTime: tournament.startTime,
-                speed,
-                status: tournament.status,
-                winnersCount: '3', // Top 3 get paid
-                distribution: 'Standard',
-                startingChips: tournament.startingChips,
-                creatorId: tournament.creatorId,
-                isPrivate,
-                password: isPrivate ? password : undefined,
-                seats: tournament.maxSeats,
-                smallBlind: tournament.smallBlind,
-                bigBlind: tournament.bigBlind
-            };
-
-            onGameCreated(newTourney, GameType.TOURNAMENT);
-            alert(`Tournament "${name}" Created!\n\nBuy-in: ${tournamentData.buyIn} chips\nPrize Pool: Top 3 (50%/30%/20%)\nYour Host Share: ${hostShare}% (${currentHostStatus.name})\n\nPlayers can now register!`);
+             alert(`Cash Game "${name}" Created!\n\nRake: 3% (Cap $${defaultRakeCap})\nYour Share: ${hostShare}% (${currentHostStatus.name})`);
         }
 
         // Reset and close
@@ -240,7 +144,7 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
         setPassword('');
     } catch (error) {
         console.error('Error creating game:', error);
-        alert('Failed to create tournament. Please try again.');
+        alert('Failed to create game. Please try again.');
     } finally {
         setIsCreating(false);
     }
@@ -253,14 +157,14 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
   ];
 
   return (
-    <Modal 
-        isOpen={isOpen} 
-        onClose={onClose} 
-        title={type === GameType.CASH ? 'Host Cash Game' : type === GameType.FUN ? 'Host Friendly Game' : 'Host Tournament'} 
-        size={type === GameType.TOURNAMENT ? 'lg' : 'md'}
+    <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title={type === GameType.CASH ? 'Host Cash Game' : 'Host Fun Game'}
+        size="md"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
-        
+
         <div className="flex bg-white/5 p-1 rounded-lg mb-6">
              <button
                 type="button"
@@ -268,13 +172,6 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
                 className={`flex-1 py-2 text-sm font-medium rounded transition-colors ${type === GameType.CASH ? 'bg-sol-green text-black' : 'text-gray-400 hover:text-white'}`}
              >
                 Cash Game
-             </button>
-             <button
-                type="button"
-                onClick={() => setType(GameType.TOURNAMENT)}
-                className={`flex-1 py-2 text-sm font-medium rounded transition-colors ${type === GameType.TOURNAMENT ? 'bg-sol-purple text-white' : 'text-gray-400 hover:text-white'}`}
-             >
-                Tournament
              </button>
              <button
                 type="button"
@@ -297,7 +194,7 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
                     </div>
                     <div className="flex items-baseline gap-2">
                         <span className="text-2xl font-mono font-bold text-white">${projectedEarnings.toFixed(2)}</span>
-                        <span className="text-xs text-gray-500">{type === GameType.CASH ? '/ hour' : 'for this event'}</span>
+                        <span className="text-xs text-gray-500">/ hour</span>
                     </div>
                 </div>
                 
@@ -310,12 +207,12 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
 
         <div className="space-y-4">
             <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">{type === GameType.TOURNAMENT ? "Tournament Name" : "Table Name"}</label>
-                <input 
-                    type="text" 
+                <label className="block text-sm font-medium text-gray-400 mb-1">Table Name</label>
+                <input
+                    type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder={type === GameType.CASH ? "e.g. Friday Night Poker" : type === GameType.FUN ? "e.g. Friendly Match" : "e.g. Sunday Million"}
+                    placeholder={type === GameType.CASH ? "e.g. Friday Night Poker" : "e.g. Friendly Match"}
                     className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white focus:border-sol-green focus:outline-none"
                     required
                 />
@@ -353,182 +250,69 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
                 )}
             </div>
 
-            {(type === GameType.CASH || type === GameType.FUN) ? (
-                <>
-                    {/* Flexible Blinds Setting */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-1">Small Blind ($)</label>
-                            <input 
-                                type="number" 
-                                value={smallBlindInput}
-                                onChange={(e) => setSmallBlindInput(e.target.value)}
-                                min="0.01"
-                                step="0.01"
+            {/* Flexible Blinds Setting */}
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1">Small Blind ($)</label>
+                    <input
+                        type="number"
+                        value={smallBlindInput}
+                        onChange={(e) => setSmallBlindInput(e.target.value)}
+                        min="0.01"
+                        step="0.01"
+                        className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white focus:border-sol-green focus:outline-none"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1">Big Blind ($)</label>
+                    <input
+                        type="number"
+                        value={(parseFloat(smallBlindInput) * 2) || 0}
+                        disabled
+                        className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-gray-400 cursor-not-allowed"
+                    />
+                    <p className="text-[10px] text-gray-500 mt-1">Auto-calculated (2x SB)</p>
+                </div>
+            </div>
+
+            {type === GameType.CASH && (
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Min Buy-in (BBs)</label>
+                        <div className="relative">
+                            <input
+                                type="number"
+                                value={minBuyInBB}
+                                onChange={(e) => setMinBuyInBB(e.target.value)}
                                 className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white focus:border-sol-green focus:outline-none"
                             />
+                            <span className="absolute right-3 top-2.5 text-gray-500 text-xs font-bold">BB</span>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-1">Big Blind ($)</label>
-                            <input 
-                                type="number" 
-                                value={(parseFloat(smallBlindInput) * 2) || 0}
-                                disabled
-                                className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-gray-400 cursor-not-allowed"
-                            />
-                            <p className="text-[10px] text-gray-500 mt-1">Auto-calculated (2x SB)</p>
-                        </div>
+                        <p className="text-[10px] text-gray-500 mt-1">
+                            ${((parseFloat(minBuyInBB) || 0) * (parseFloat(smallBlindInput) * 2 || 0)).toLocaleString()}
+                        </p>
                     </div>
-                    
-                    {type === GameType.CASH && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1">Min Buy-in (BBs)</label>
-                                <div className="relative">
-                                    <input 
-                                        type="number"
-                                        value={minBuyInBB}
-                                        onChange={(e) => setMinBuyInBB(e.target.value)}
-                                        className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white focus:border-sol-green focus:outline-none"
-                                    />
-                                    <span className="absolute right-3 top-2.5 text-gray-500 text-xs font-bold">BB</span>
-                                </div>
-                                <p className="text-[10px] text-gray-500 mt-1">
-                                    ${((parseFloat(minBuyInBB) || 0) * (parseFloat(smallBlindInput) * 2 || 0)).toLocaleString()}
-                                </p>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1">Max Buy-in (BBs)</label>
-                                <div className="relative">
-                                    <input 
-                                        type="number"
-                                        value={maxBuyInBB}
-                                        onChange={(e) => setMaxBuyInBB(e.target.value)}
-                                        className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white focus:border-sol-green focus:outline-none"
-                                    />
-                                    <span className="absolute right-3 top-2.5 text-gray-500 text-xs font-bold">BB</span>
-                                </div>
-                                <p className="text-[10px] text-gray-500 mt-1">
-                                    ${((parseFloat(maxBuyInBB) || 0) * (parseFloat(smallBlindInput) * 2 || 0)).toLocaleString()}
-                                </p>
-                            </div>
-                        </div>
-                    )}
-                </>
-            ) : (
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                             <label className="block text-sm font-medium text-gray-400 mb-1">Entry Fee (USDT)</label>
-                             <input 
-                                type="number"
-                                value={entryFee}
-                                onChange={(e) => setEntryFee(e.target.value)}
-                                placeholder="50"
-                                className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white focus:border-sol-purple focus:outline-none"
-                            />
-                        </div>
-                         <div>
-                             <label className="block text-sm font-medium text-gray-400 mb-1">Guaranteed Prize</label>
-                             <input 
-                                type="number"
-                                value={guaranteedPrize}
-                                onChange={(e) => setGuaranteedPrize(e.target.value)}
-                                placeholder="10000"
-                                className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white focus:border-sol-purple focus:outline-none"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Tournament Fee Slider */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-2">Tournament Fee (%)</label>
-                        <div className="flex items-center gap-4 bg-white/5 p-3 rounded-xl border border-white/5">
-                            <input 
-                                type="range"
-                                min="0"
-                                max="20"
-                                step="0.5"
-                                value={tournamentFeePercent}
-                                onChange={(e) => setTournamentFeePercent(e.target.value)}
-                                className="flex-1 accent-sol-purple h-2 bg-black/40 rounded-lg appearance-none cursor-pointer"
-                            />
-                            <div className="relative w-20">
-                                <input 
-                                    type="number"
-                                    min="0"
-                                    max="20"
-                                    step="0.5"
-                                    value={tournamentFeePercent}
-                                    onChange={(e) => setTournamentFeePercent(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg py-1.5 pl-2 pr-6 text-right text-white text-sm focus:border-sol-purple focus:outline-none"
-                                />
-                                <span className="absolute right-2 top-1.5 text-gray-500 text-xs font-bold">%</span>
-                            </div>
-                        </div>
-                        <div className="flex justify-between items-center mt-2 px-1">
-                            <span className="text-[10px] text-gray-500">Min 0%</span>
-                            <p className="text-[10px] text-gray-400">
-                                Player pays <span className="text-white font-mono">${(parseFloat(entryFee) || 0).toLocaleString()}</span> + <span className="text-sol-purple font-bold font-mono">${((parseFloat(entryFee) || 0) * (parseFloat(tournamentFeePercent)/100)).toFixed(2)}</span> Fee
-                            </p>
-                            <span className="text-[10px] text-gray-500">Max 20%</span>
-                        </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                         <div>
-                             <label className="block text-sm font-medium text-gray-400 mb-1">Max Players</label>
-                             <input 
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Max Buy-in (BBs)</label>
+                        <div className="relative">
+                            <input
                                 type="number"
-                                value={maxPlayers}
-                                onChange={(e) => setMaxPlayers(e.target.value)}
-                                placeholder="1000"
-                                className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white focus:border-sol-purple focus:outline-none"
+                                value={maxBuyInBB}
+                                onChange={(e) => setMaxBuyInBB(e.target.value)}
+                                className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white focus:border-sol-green focus:outline-none"
                             />
+                            <span className="absolute right-3 top-2.5 text-gray-500 text-xs font-bold">BB</span>
                         </div>
-                        <div>
-                             <label className="block text-sm font-medium text-gray-400 mb-1">Starting Chips</label>
-                             <select 
-                                value={startingChips}
-                                onChange={(e) => setStartingChips(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white focus:border-sol-purple focus:outline-none"
-                             >
-                                <option value="5000">5,000 (Short Stack)</option>
-                                <option value="10000">10,000 (Standard)</option>
-                                <option value="25000">25,000 (Deep Stack)</option>
-                                <option value="50000">50,000 (Monster Stack)</option>
-                             </select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                             <label className="block text-sm font-medium text-gray-400 mb-1">Paid Places</label>
-                             <input 
-                                type="number"
-                                value={winnersCount}
-                                onChange={(e) => setWinnersCount(e.target.value)}
-                                max={maxPlayers}
-                                className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white focus:border-sol-purple focus:outline-none"
-                            />
-                            <p className="text-[10px] text-gray-500 mt-1">Recommended: {Math.max(1, Math.floor((parseInt(maxPlayers)||0) * 0.15))}</p>
-                        </div>
-                        <div>
-                             <label className="block text-sm font-medium text-gray-400 mb-1">Start Time</label>
-                             <input 
-                                type="datetime-local"
-                                value={startTime}
-                                onChange={(e) => setStartTime(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white focus:border-sol-purple focus:outline-none text-xs"
-                            />
-                        </div>
+                        <p className="text-[10px] text-gray-500 mt-1">
+                            ${((parseFloat(maxBuyInBB) || 0) * (parseFloat(smallBlindInput) * 2 || 0)).toLocaleString()}
+                        </p>
                     </div>
                 </div>
             )}
 
             <div className="grid grid-cols-2 gap-4">
                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-1">{type === GameType.TOURNAMENT ? "Table Size" : "Seats"}</label>
+                    <label className="block text-sm font-medium text-gray-400 mb-1">Seats</label>
                      <div className="flex gap-2">
                         {[6, 9].map(s => (
                             <button
@@ -561,10 +345,10 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
             <Button
                 fullWidth
                 type="submit"
-                variant={type === GameType.CASH ? 'primary' : type === GameType.FUN ? 'outline' : 'secondary'}
+                variant={type === GameType.CASH ? 'primary' : 'outline'}
                 disabled={isCreating}
             >
-                {isCreating ? 'Creating...' : (type === GameType.CASH ? 'Create Table & Start Earning' : type === GameType.FUN ? 'Create Fun Table' : 'Host Tournament')}
+                {isCreating ? 'Creating...' : (type === GameType.CASH ? 'Create Table & Start Earning' : 'Create Fun Table')}
             </Button>
         </div>
       </form>

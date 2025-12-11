@@ -2,18 +2,17 @@
 import React, { useState } from 'react';
 import { Search, Plus } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import { TableCard, TournamentCard } from '../components/GameCards';
-import { GameType, Speed, PokerTable, Tournament } from '../types';
+import { TableCard } from '../components/GameCards';
+import { GameType, Speed, PokerTable } from '../types';
 
 interface LobbyProps {
   onCreateGame: (type: GameType) => void;
   onJoinGame: (id: string) => void;
   tables: PokerTable[];
-  tournaments: Tournament[];
 }
 
-export const Lobby: React.FC<LobbyProps> = ({ onCreateGame, onJoinGame, tables, tournaments }) => {
-  const [activeTab, setActiveTab] = useState<'cash' | 'tournament' | 'fun'>('cash');
+export const Lobby: React.FC<LobbyProps> = ({ onCreateGame, onJoinGame, tables }) => {
+  const [activeTab, setActiveTab] = useState<'cash' | 'fun'>('cash');
   const [searchQuery, setSearchQuery] = useState('');
   const [speedFilter, setSpeedFilter] = useState<Speed | 'ALL'>('ALL');
 
@@ -31,22 +30,13 @@ export const Lobby: React.FC<LobbyProps> = ({ onCreateGame, onJoinGame, tables, 
     .sort((a, b) => b.occupiedSeats - a.occupiedSeats); // Sort most players
 
   const filteredFunTables = tables
-    .filter(t => 
+    .filter(t =>
       (t.type === GameType.FUN) &&
       t.occupiedSeats < t.seats && // Hide if full
-      t.name.toLowerCase().includes(searchQuery.toLowerCase()) && 
+      t.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
       (speedFilter === 'ALL' || t.speed === speedFilter)
     )
     .sort((a, b) => b.occupiedSeats - a.occupiedSeats); // Sort most players
-
-  const filteredTournaments = tournaments
-    .filter(t => 
-      t.status === 'REGISTERING' && // Only show open
-      t.registeredPlayers < t.maxPlayers && // Hide if full
-      t.name.toLowerCase().includes(searchQuery.toLowerCase()) && 
-      (speedFilter === 'ALL' || t.speed === speedFilter)
-    )
-    .sort((a, b) => b.registeredPlayers - a.registeredPlayers); // Sort most players
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -54,7 +44,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onCreateGame, onJoinGame, tables, 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div className="items-start">
            <h1 className="text-3xl font-bold text-white mb-2">Game Lobby</h1>
-           <p className="text-gray-400">Find the perfect table or tournament.</p>
+           <p className="text-gray-400">Find the perfect table to join and play.</p>
         </div>
         
         <div className="flex gap-3 bg-white/5 p-1 rounded-lg w-full md:w-auto flex-1 md:flex-none overflow-x-auto">
@@ -65,14 +55,6 @@ export const Lobby: React.FC<LobbyProps> = ({ onCreateGame, onJoinGame, tables, 
                 }`}
              >
                 Cash Games
-             </button>
-             <button
-                onClick={() => setActiveTab('tournament')}
-                className={`flex-1 md:flex-none px-6 py-2 rounded-md text-sm font-medium transition-all text-center whitespace-nowrap ${
-                  activeTab === 'tournament' ? 'bg-sol-purple text-white shadow-lg' : 'text-gray-400 hover:text-white'
-                }`}
-             >
-                Tournaments
              </button>
              <button
                 onClick={() => setActiveTab('fun')}
@@ -110,10 +92,10 @@ export const Lobby: React.FC<LobbyProps> = ({ onCreateGame, onJoinGame, tables, 
                 <option value={Speed.HYPER}>Hyper</option>
              </select>
              
-             <Button 
-                variant="outline" 
-                className="flex-1 md:flex-none gap-2 whitespace-nowrap" 
-                onClick={() => onCreateGame(activeTab === 'tournament' ? GameType.TOURNAMENT : activeTab === 'fun' ? GameType.FUN : GameType.CASH)}
+             <Button
+                variant="outline"
+                className="flex-1 md:flex-none gap-2 whitespace-nowrap"
+                onClick={() => onCreateGame(activeTab === 'fun' ? GameType.FUN : GameType.CASH)}
              >
                 <Plus size={18} /> Create New
              </Button>

@@ -61,17 +61,17 @@ const playNoise = (duration: number, filterFreq: number, filterType: BiquadFilte
   }
 };
 
-// Chip clinking sound - ceramic/clay chip hitting felt
+// Chip clinking sound - ceramic/clay chip hitting felt (professional casino sound)
 const playChipSound = () => {
   const ctx = getAudioContext();
   if (!ctx || !audioEnabled) return;
 
-  // Multiple quick impacts to simulate chip stack
+  // Multiple quick impacts to simulate chip stack - deeper, more realistic
   for (let i = 0; i < 3; i++) {
     setTimeout(() => {
-      playNoise(0.06, 3000 + Math.random() * 1000, 'bandpass', 0.15);
-      playTone(800 + Math.random() * 400, 0.04, 'sine', 0.1);
-    }, i * 25);
+      playNoise(0.08, 2200 + Math.random() * 800, 'bandpass', 0.18);
+      playTone(600 + Math.random() * 300, 0.05, 'sine', 0.12);
+    }, i * 30);
   }
 };
 
@@ -100,52 +100,76 @@ const soundGenerators: Record<GameSound, () => void> = {
   // Single chip clink
   chip: () => playChipSound(),
   
-  // Bet: chips sliding and stacking
+  // Bet: professional chip sliding and stacking
   bet: () => {
     for (let i = 0; i < 4; i++) {
-      setTimeout(() => playChipSound(), i * 40);
+      setTimeout(() => {
+        playChipSound();
+        // Add felt thump
+        playTone(200, 0.04, 'sine', 0.08);
+      }, i * 40);
     }
   },
-  
-  // Call: clean chip toss
+
+  // Call: clean chip toss with weight
   call: () => {
-    setTimeout(() => playChipSound(), 0);
-    setTimeout(() => playChipSound(), 60);
+    playChipSound();
+    setTimeout(() => {
+      playChipSound();
+      playTone(220, 0.06, 'sine', 0.12);
+    }, 65);
   },
-  
-  // Check: table tap - knuckle knock sound
+
+  // Check: table tap - professional knock
   check: () => {
-    playNoise(0.08, 400, 'lowpass', 0.2);
-    playTone(180, 0.06, 'sine', 0.15);
+    playNoise(0.08, 350, 'lowpass', 0.22);
+    playTone(160, 0.07, 'sine', 0.16);
   },
-  
-  // Fold: cards sliding/tossing
+
+  // Fold: cards sliding with muted thud
   fold: () => {
-    playNoise(0.15, 1500, 'highpass', 0.1);
-    setTimeout(() => playNoise(0.08, 300, 'lowpass', 0.08), 100);
+    playNoise(0.16, 1400, 'highpass', 0.11);
+    setTimeout(() => {
+      playNoise(0.09, 280, 'lowpass', 0.09);
+      playTone(140, 0.08, 'sine', 0.08);
+    }, 110);
   },
-  
-  // Raise: dramatic chip stack
+
+  // Raise: authoritative chip stack
   raise: () => {
     for (let i = 0; i < 6; i++) {
       setTimeout(() => {
         playChipSound();
-      }, i * 30);
+        // Add weight every 2nd chip
+        if (i % 2 === 0) {
+          playTone(180, 0.06, 'sine', 0.14);
+        }
+      }, i * 32);
     }
-    // Dramatic low thud
-    setTimeout(() => playTone(120, 0.15, 'sine', 0.2), 180);
+    // Authoritative thud at the end
+    setTimeout(() => {
+      playTone(110, 0.18, 'sine', 0.22);
+      playNoise(0.12, 300, 'lowpass', 0.16);
+    }, 200);
   },
   
-  // Win: celebratory chips cascading + subtle fanfare
+  // Win: professional chip sweep sound (no music)
   win: () => {
-    // Chip cascade
-    for (let i = 0; i < 8; i++) {
-      setTimeout(() => playChipSound(), i * 50);
+    // Professional chip sweep - faster, more intense
+    for (let i = 0; i < 10; i++) {
+      setTimeout(() => {
+        playChipSound();
+        // Add deeper thump for weight
+        if (i % 3 === 0) {
+          playTone(150, 0.08, 'sine', 0.15);
+        }
+      }, i * 45);
     }
-    // Subtle musical accent (major chord arpeggio)
-    setTimeout(() => playTone(523, 0.2, 'sine', 0.15), 100); // C5
-    setTimeout(() => playTone(659, 0.2, 'sine', 0.15), 200); // E5
-    setTimeout(() => playTone(784, 0.25, 'sine', 0.18), 300); // G5
+    // Final satisfying thud
+    setTimeout(() => {
+      playTone(120, 0.2, 'sine', 0.2);
+      playNoise(0.15, 400, 'lowpass', 0.18);
+    }, 480);
   },
   
   // Deal: multiple cards being dealt
@@ -168,11 +192,15 @@ const soundGenerators: Record<GameSound, () => void> = {
     setTimeout(() => playTone(500, 0.1, 'sine', 0.1), 150);
   },
   
-  // Your turn notification - gentle but noticeable
+  // Your turn notification - professional alert
   your_turn: () => {
-    playTone(440, 0.15, 'sine', 0.25); // A4
-    setTimeout(() => playTone(554, 0.15, 'sine', 0.25), 150); // C#5
-    setTimeout(() => playTone(659, 0.2, 'sine', 0.3), 300); // E5
+    // Double tap - clear but not musical
+    playTone(600, 0.08, 'sine', 0.22);
+    playNoise(0.05, 2000, 'bandpass', 0.15);
+    setTimeout(() => {
+      playTone(600, 0.08, 'sine', 0.22);
+      playNoise(0.05, 2000, 'bandpass', 0.15);
+    }, 120);
   },
   
   // Timer warning - subtle tick

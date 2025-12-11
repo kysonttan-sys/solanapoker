@@ -39,7 +39,6 @@ export interface User {
 
 export enum GameType {
   CASH = 'CASH',
-  TOURNAMENT = 'TOURNAMENT',
   FUN = 'FUN'
 }
 
@@ -66,24 +65,7 @@ export interface PokerTable {
   password?: string;
 }
 
-export interface Tournament {
-  id: string;
-  creatorId?: string; // For Host-to-Earn
-  name: string;
-  buyIn: number;
-  prizePool: number;
-  registeredPlayers: number;
-  maxPlayers: number;
-  startTime: string; // ISO date string
-  speed: Speed;
-  status: 'REGISTERING' | 'LIVE' | 'FINISHED';
-  winnersCount?: string; // e.g. "15" or "Top 10%"
-  distribution?: string; // e.g. "Standard", "WinnerTakesAll"
-  startingChips?: number;
-  seats?: 6 | 9; // Added seats property
-  isPrivate?: boolean;
-  password?: string;
-}
+// Tournament interface removed - feature not ready for production
 
 export interface GameStats {
   totalHands: number;
@@ -91,6 +73,4 @@ export interface GameStats {
   totalWinnings: number;
   roi: number;
   bestHand: string;
-  tournamentsPlayed: number;
-  tournamentsWon: number;
 }

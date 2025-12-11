@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Filter, Plus, Award, ArrowRight, Coins, Users, Layers, Activity, Globe, Zap, CheckCircle, Gift, Crown, Timer, Sparkles } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import { GameType, PokerTable, Tournament } from '../types';
-import { TableCard, TournamentCard } from '../components/GameCards';
+import { GameType, PokerTable } from '../types';
+import { TableCard } from '../components/GameCards';
 import { PRIZE_POOL_INFO } from '../constants';
 import { getApiUrl } from '../utils/api';
 
@@ -12,12 +12,11 @@ interface HomeProps {
   onCreateGame: (type: GameType) => void;
   onJoinGame: (id: string) => void;
   tables: PokerTable[];
-  tournaments: Tournament[];
 }
 
-export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables, tournaments }) => {
+export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'cash' | 'tournament' | 'fun'>('cash');
+  const [activeTab, setActiveTab] = useState<'cash' | 'fun'>('cash');
   
   // Countdown timer to 1st of next month (Jackpot payout)
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0 });
@@ -56,11 +55,6 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables, to
   const displayFunTables = tables
     .filter(t => t.type === GameType.FUN && t.occupiedSeats < t.seats)
     .sort((a, b) => b.occupiedSeats - a.occupiedSeats)
-    .slice(0, 3);
-
-  const displayTournaments = tournaments
-    .filter(t => t.status === 'REGISTERING' && t.registeredPlayers < t.maxPlayers)
-    .sort((a, b) => b.registeredPlayers - a.registeredPlayers)
     .slice(0, 3);
 
   // Platform Statistics Data - Live from Backend
@@ -202,14 +196,14 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables, to
 
       {/* Ecosystem Features Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-gradient-to-br from-[#1A1A24] to-[#13131F] border border-sol-purple/30 rounded-xl p-6 relative overflow-hidden group cursor-pointer" onClick={() => onCreateGame(GameType.TOURNAMENT)}>
+          <div className="bg-gradient-to-br from-[#1A1A24] to-[#13131F] border border-sol-purple/30 rounded-xl p-6 relative overflow-hidden group cursor-pointer" onClick={() => onCreateGame(GameType.CASH)}>
                <div className="absolute right-0 top-0 w-32 h-32 bg-sol-purple/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-sol-purple/30 transition-all"></div>
                <div className="relative z-10">
                    <div className="flex items-center gap-2 mb-3">
                        <div className="p-2 bg-sol-purple/20 rounded-lg text-sol-purple"><Coins size={20} /></div>
                        <h3 className="text-xl font-bold text-white">Host to Earn</h3>
                    </div>
-                   <p className="text-gray-400 text-sm mb-4">Be the House. Create tables or tournaments and earn <span className="text-white font-bold">up to 40%</span> of all rake and fees generated.</p>
+                   <p className="text-gray-400 text-sm mb-4">Be the House. Create cash game tables and earn <span className="text-white font-bold">up to 40%</span> of all rake generated.</p>
                    <span className="text-sol-purple text-sm font-bold flex items-center gap-1 group-hover:gap-2 transition-all">Start Hosting <ArrowRight size={14}/></span>
                </div>
           </div>
@@ -252,14 +246,6 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables, to
               Cash Games
             </button>
             <button
-              onClick={() => setActiveTab('tournament')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
-                activeTab === 'tournament' ? 'bg-sol-purple text-white shadow-lg' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Tournaments
-            </button>
-            <button
               onClick={() => setActiveTab('fun')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
                 activeTab === 'fun' ? 'bg-yellow-500 text-black shadow-lg' : 'text-gray-400 hover:text-white'
@@ -273,13 +259,13 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables, to
             <Button variant="ghost" size="sm" className="gap-2" onClick={() => navigate('/lobby')}>
               <Filter size={16} /> Filter
             </Button>
-            <Button 
-                variant="secondary" 
-                size="sm" 
-                className="gap-2" 
-                onClick={() => onCreateGame(activeTab === 'cash' ? GameType.CASH : activeTab === 'tournament' ? GameType.TOURNAMENT : GameType.FUN)}
+            <Button
+                variant="secondary"
+                size="sm"
+                className="gap-2"
+                onClick={() => onCreateGame(activeTab === 'cash' ? GameType.CASH : GameType.FUN)}
             >
-              <Plus size={16} /> Create {activeTab === 'cash' ? 'Table' : activeTab === 'tournament' ? 'Event' : 'Fun Table'}
+              <Plus size={16} /> Create {activeTab === 'cash' ? 'Table' : 'Fun Table'}
             </Button>
           </div>
         </div>
@@ -297,17 +283,6 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables, to
                     <Button variant="ghost" className="mt-2 text-sol-green" onClick={() => onCreateGame(GameType.CASH)}>Create one?</Button>
                 </div>
             )
-          ) : activeTab === 'tournament' ? (
-             displayTournaments.length > 0 ? (
-                displayTournaments.map((tour) => (
-                <TournamentCard key={tour.id} tournament={tour} onJoin={onJoinGame} />
-                ))
-             ) : (
-                <div className="col-span-full text-center py-12 text-gray-500 bg-white/5 rounded-xl border border-white/5 border-dashed">
-                    <p>No open tournaments found.</p>
-                    <Button variant="ghost" className="mt-2 text-sol-purple" onClick={() => onCreateGame(GameType.TOURNAMENT)}>Create one?</Button>
-                </div>
-             )
           ) : (
              displayFunTables.length > 0 ? (
                 displayFunTables.map((table) => (

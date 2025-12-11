@@ -547,14 +547,28 @@ export class PokerEngine {
             break;
 
         case 'raise':
-            let raiseTo = amount;
-            if (raiseTo < state.minBet * 2) raiseTo = state.minBet * 2; 
-            
-            const addedAmt = safeMoney(raiseTo - player.bet, state.gameMode);
-            const actualRaise = Math.min(addedAmt, player.balance);
-            const remainingAfterRaise = safeMoney(player.balance - actualRaise, state.gameMode);
-            
-            const finalBet = safeMoney(player.bet + actualRaise, state.gameMode);
+            // Detect All-In: if amount >= player's balance, go all-in
+            const isAllInRaise = amount >= player.balance;
+
+            let actualRaise: number;
+            let finalBet: number;
+            let remainingAfterRaise: number;
+
+            if (isAllInRaise) {
+                // ALL-IN: Take entire balance
+                actualRaise = player.balance;
+                finalBet = safeMoney(player.bet + actualRaise, state.gameMode);
+                remainingAfterRaise = 0;
+            } else {
+                // NORMAL RAISE: amount is the total bet to make this round
+                let raiseTo = amount;
+                if (raiseTo < state.minBet * 2) raiseTo = state.minBet * 2;
+
+                const addedAmt = safeMoney(raiseTo - player.bet, state.gameMode);
+                actualRaise = Math.min(addedAmt, player.balance);
+                remainingAfterRaise = safeMoney(player.balance - actualRaise, state.gameMode);
+                finalBet = safeMoney(player.bet + actualRaise, state.gameMode);
+            }
 
             newPlayers[playerIndex] = {
                 ...player,
@@ -567,9 +581,9 @@ export class PokerEngine {
             };
             newPot = safeMoney(newPot + actualRaise, state.gameMode);
             newMinBet = Math.max(state.minBet, finalBet);
-            
+
             logMsg = remainingAfterRaise === 0 ? `${player.name} raises All In!` : `${player.name} raises to ${newMinBet}.`;
-            lastAggressorId = player.id; 
+            lastAggressorId = player.id;
             break;
     }
 

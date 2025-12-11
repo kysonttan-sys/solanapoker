@@ -169,9 +169,14 @@ export const GameControls: React.FC<GameControlsProps> = ({
                 {toCall > 0 && <span className="text-[10px] sm:text-xs text-gray-300 font-mono">{fmt(Math.min(toCall, userBalance))}</span>}
             </button>
 
-            <button 
+            <button
                 onClick={() => onAction('raise', raiseAmount)}
-                className="flex flex-col items-center justify-center bg-[#0d2626] hover:bg-[#113333] active:bg-[#164040] transition-colors"
+                disabled={raiseAmount < toCall && !isRaiseAllIn}
+                className={`flex flex-col items-center justify-center transition-colors ${
+                    raiseAmount < toCall && !isRaiseAllIn
+                        ? 'bg-gray-800 cursor-not-allowed opacity-50'
+                        : 'bg-[#0d2626] hover:bg-[#113333] active:bg-[#164040]'
+                }`}
             >
                 <span className="text-sol-green font-bold text-sm sm:text-lg">
                     {isRaiseAllIn ? 'ALL IN' : currentBet === 0 ? 'BET' : 'RAISE'}
