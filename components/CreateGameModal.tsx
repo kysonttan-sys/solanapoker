@@ -5,6 +5,8 @@ import { Button } from './ui/Button';
 import { GameType, Speed, PokerTable, Tournament } from '../types';
 import { Coins, TrendingUp, Info, PieChart, Crown, Gift, Layers, Globe, Zap, Smile, Lock, Key, Calculator } from 'lucide-react';
 import { getHostStatus, MOCK_USER, PROTOCOL_FEE_SPLIT } from '../constants'; // Importing Mock User for demo state
+import { getApiUrl } from '../utils/api';
+import { useWallet } from './WalletContextProvider';
 
 interface CreateGameModalProps {
   isOpen: boolean;
@@ -14,7 +16,9 @@ interface CreateGameModalProps {
 }
 
 export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClose, defaultType, onGameCreated }) => {
+  const { publicKey } = useWallet();
   const [type, setType] = useState<GameType>(defaultType);
+  const [isCreating, setIsCreating] = useState(false);
 
   // Form states
   const [name, setName] = useState('');
@@ -127,76 +131,119 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
   }, [type, smallBlindInput, entryFee, maxPlayers, tournamentFeePercent, hostShare, speed, minBuyInBB, maxBuyInBB, seats]);
 
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (type === GameType.CASH || type === GameType.FUN) {
-        let sb = parseFloat(smallBlindInput) || 0;
-        let bb = sb * 2;
-        
-        // Calculate actual buy-in limits based on BB multipliers
-        let buyInMinVal = bb * (parseFloat(minBuyInBB) || 50);
-        let buyInMaxVal = bb * (parseFloat(maxBuyInBB) || 100);
+    setIsCreating(true);
 
-        // FUN MODE: Multiplier for blinds
-        if (type === GameType.FUN) {
-            sb *= 100;
-            bb *= 100;
-            buyInMinVal = bb * 100; 
-            buyInMaxVal = bb * 100;
-        }
+    try {
+        if (type === GameType.CASH || type === GameType.FUN) {
+            let sb = parseFloat(smallBlindInput) || 0;
+            let bb = sb * 2;
 
-        const newTable: PokerTable = {
-            id: `table_${Date.now()}`,
-            name,
-            smallBlind: sb,
-            bigBlind: bb,
-            seats,
-            occupiedSeats: 0, // Starts empty
-            buyInMin: buyInMinVal,
-            buyInMax: buyInMaxVal,
-            speed,
-            rakeCap: type === GameType.FUN ? 0 : defaultRakeCap,
-            type: type,
-            creatorId: MOCK_USER.id,
-            isPrivate,
-            password: isPrivate ? password : undefined
-        };
-        onGameCreated(newTable, type);
-        
-        if (type === GameType.FUN) {
-             alert(`Fun Table "${name}" Created!\n\nType: Play Money\nBlinds: ${sb}/${bb}\nStart Chips: ${buyInMinVal} (100bb Auto)`);
+            // Calculate actual buy-in limits based on BB multipliers
+            let buyInMinVal = bb * (parseFloat(minBuyInBB) || 50);
+            let buyInMaxVal = bb * (parseFloat(maxBuyInBB) || 100);
+
+            // FUN MODE: Multiplier for blinds
+            if (type === GameType.FUN) {
+                sb *= 100;
+                bb *= 100;
+                buyInMinVal = bb * 100;
+                buyInMaxVal = bb * 100;
+            }
+
+            const newTable: PokerTable = {
+                id: `table_${Date.now()}`,
+                name,
+                smallBlind: sb,
+                bigBlind: bb,
+                seats,
+                occupiedSeats: 0, // Starts empty
+                buyInMin: buyInMinVal,
+                buyInMax: buyInMaxVal,
+                speed,
+                rakeCap: type === GameType.FUN ? 0 : defaultRakeCap,
+                type: type,
+                creatorId: publicKey?.toBase58() || MOCK_USER.id,
+                isPrivate,
+                password: isPrivate ? password : undefined
+            };
+            onGameCreated(newTable, type);
+
+            if (type === GameType.FUN) {
+                 alert(`Fun Table "${name}" Created!\n\nType: Play Money\nBlinds: ${sb}/${bb}\nStart Chips: ${buyInMinVal} (100bb Auto)`);
+            } else {
+                 alert(`Cash Game "${name}" Created!\n\nRake: 3% (Cap $${defaultRakeCap})\nYour Share: ${hostShare}% (${currentHostStatus.name})`);
+            }
         } else {
-             alert(`Cash Game "${name}" Created!\n\nRake: 3% (Cap $${defaultRakeCap})\nYour Share: ${hostShare}% (${currentHostStatus.name})`);
+            // Tournament: Call API to create in database
+            const sb = parseFloat(smallBlindInput) || 50;
+            const bb = sb * 2;
+
+            const tournamentData = {
+                name,
+                buyIn: parseFloat(entryFee) || 0,
+                maxPlayers: parseInt(maxPlayers) || 9,
+                minPlayers: Math.max(2, Math.ceil(parseInt(maxPlayers) * 0.3)), // Min 30% of max players
+                maxSeats: seats,
+                startingChips: parseInt(startingChips) || 10000,
+                smallBlind: sb,
+                bigBlind: bb,
+                creatorId: publicKey?.toBase58() || MOCK_USER.id
+            };
+
+            const response = await fetch(`${getApiUrl()}/api/tournaments`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(tournamentData)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to create tournament');
+            }
+
+            const result = await response.json();
+            const tournament = result.tournament;
+
+            // Format for frontend
+            const newTourney: Tournament = {
+                id: tournament.id,
+                name: tournament.name,
+                buyIn: tournament.buyIn,
+                prizePool: tournament.prizePool,
+                registeredPlayers: tournament.registeredCount,
+                maxPlayers: tournament.maxPlayers,
+                startTime: tournament.startTime,
+                speed,
+                status: tournament.status,
+                winnersCount: '3', // Top 3 get paid
+                distribution: 'Standard',
+                startingChips: tournament.startingChips,
+                creatorId: tournament.creatorId,
+                isPrivate,
+                password: isPrivate ? password : undefined,
+                seats: tournament.maxSeats,
+                smallBlind: tournament.smallBlind,
+                bigBlind: tournament.bigBlind
+            };
+
+            onGameCreated(newTourney, GameType.TOURNAMENT);
+            alert(`Tournament "${name}" Created!\n\nBuy-in: ${tournamentData.buyIn} chips\nPrize Pool: Top 3 (50%/30%/20%)\nYour Host Share: ${hostShare}% (${currentHostStatus.name})\n\nPlayers can now register!`);
         }
-    } else {
-        const newTourney: Tournament = {
-            id: `tour_${Date.now()}`,
-            name,
-            buyIn: parseFloat(entryFee) || 0,
-            prizePool: parseFloat(guaranteedPrize) || 0,
-            registeredPlayers: 1, // You are the first registrant
-            maxPlayers: parseInt(maxPlayers) || 100,
-            startTime: startTime || new Date(Date.now() + 3600000).toISOString(),
-            speed,
-            status: 'REGISTERING',
-            winnersCount,
-            distribution,
-            startingChips: parseInt(startingChips) || 10000,
-            creatorId: MOCK_USER.id,
-            isPrivate,
-            password: isPrivate ? password : undefined,
-            seats // Include seats from state
-        };
-        onGameCreated(newTourney, GameType.TOURNAMENT);
-        alert(`Tournament "${name}" Created!\n\nPlatform Fee: ${tournamentFeePercent}%\nYour Share: ${hostShare}% (${currentHostStatus.name})`);
+
+        // Reset and close
+        onClose();
+        setName('');
+        setIsPrivate(false);
+        setPassword('');
+    } catch (error) {
+        console.error('Error creating game:', error);
+        alert('Failed to create tournament. Please try again.');
+    } finally {
+        setIsCreating(false);
     }
-    
-    // Reset and close
-    onClose();
-    setName('');
-    setIsPrivate(false);
-    setPassword('');
   };
 
   const speedOptions = [
@@ -511,8 +558,13 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
         </div>
 
         <div className="pt-4">
-            <Button fullWidth type="submit" variant={type === GameType.CASH ? 'primary' : type === GameType.FUN ? 'outline' : 'secondary'}>
-                {type === GameType.CASH ? 'Create Table & Start Earning' : type === GameType.FUN ? 'Create Fun Table' : 'Host Tournament'}
+            <Button
+                fullWidth
+                type="submit"
+                variant={type === GameType.CASH ? 'primary' : type === GameType.FUN ? 'outline' : 'secondary'}
+                disabled={isCreating}
+            >
+                {isCreating ? 'Creating...' : (type === GameType.CASH ? 'Create Table & Start Earning' : type === GameType.FUN ? 'Create Fun Table' : 'Host Tournament')}
             </Button>
         </div>
       </form>

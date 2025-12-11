@@ -237,7 +237,7 @@ console.log(balances); // { globalPool: 150.50, jackpot: 250.75 }
 ## ✅ System Status
 
 - ✅ Rake calculation with VIP levels
-- ✅ 6-way distribution working
+- ✅ 5-way distribution working
 - ✅ Database tracking complete
 - ✅ Global Partner Pool auto-distribution
 - ✅ Monthly Jackpot scheduled distribution

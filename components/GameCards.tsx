@@ -4,6 +4,8 @@ import { Users, Clock, Check, Trophy, Layers, Lock, Calendar } from 'lucide-reac
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { PokerTable, Tournament, Speed, GameType } from '../types';
+import { getApiUrl } from '../utils/api';
+import { useWallet } from './WalletContextProvider';
 
 export const Badge = ({ type }: { type: Speed }) => {
   const colors = {
@@ -97,9 +99,9 @@ export const TournamentCard: React.FC<{ tournament: Tournament, onJoin: (id: str
   const [hasRegistered, setHasRegistered] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
 
-  const handleRegister = (e: React.MouseEvent) => {
+  const handleRegister = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
     if (tournament.isPrivate) {
         const password = prompt("Enter Tournament Password:");
         if (password !== tournament.password) {
@@ -108,8 +110,59 @@ export const TournamentCard: React.FC<{ tournament: Tournament, onJoin: (id: str
         }
     }
 
-    // Simulate auth check/registration
-    onJoin(tournament.id);
+    setIsRegistering(true);
+
+    try {
+        // Get user data from localStorage (set by WalletContextProvider)
+        const walletAddress = localStorage.getItem('connectedWallet');
+        const userDataStr = localStorage.getItem(`solpoker_user_${walletAddress}`);
+
+        if (!walletAddress || !userDataStr) {
+            alert('Please connect your wallet first');
+            return;
+        }
+
+        const userData = JSON.parse(userDataStr);
+
+        // Confirm registration
+        const confirmed = window.confirm(
+            `Register for ${tournament.name}?\n\nBuy-in: ${tournament.buyIn} chips\nYour balance: ${userData.balance} chips\n\nTop 3 get prizes (50%/30%/20%)`
+        );
+
+        if (!confirmed) {
+            setIsRegistering(false);
+            return;
+        }
+
+        // Call registration API
+        const response = await fetch(`${getApiUrl()}/api/tournaments/${tournament.id}/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                userId: userData.id,
+                username: userData.username
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Registration failed');
+        }
+
+        setHasRegistered(true);
+        alert(`Successfully registered for ${tournament.name}!\n\nYou can now wait for the tournament to start.`);
+
+        // Optionally navigate to tournament room
+        // onJoin(tournament.id);
+    } catch (error: any) {
+        console.error('Registration error:', error);
+        alert(`Registration failed: ${error.message}`);
+    } finally {
+        setIsRegistering(false);
+    }
   };
 
   const startDate = new Date(tournament.startTime);
