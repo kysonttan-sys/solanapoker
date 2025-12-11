@@ -70,7 +70,7 @@ export class TournamentManager {
             return { success: false, message: 'Tournament registration is closed' };
         }
 
-        const players: TournamentPlayer[] = JSON.parse(tournament.players);
+        const players: TournamentPlayer[] = JSON.parse(tournament.players ?? '[]');
 
         // Check if already registered
         if (players.some(p => p.userId === userId)) {
@@ -161,7 +161,7 @@ export class TournamentManager {
             return { success: false, message: 'Tournament already started or finished' };
         }
 
-        const players: TournamentPlayer[] = JSON.parse(tournament.players);
+        const players: TournamentPlayer[] = JSON.parse(tournament.players ?? '[]');
 
         if (players.length < tournament.minPlayers) {
             return { success: false, message: `Need at least ${tournament.minPlayers} players to start` };
@@ -250,7 +250,7 @@ export class TournamentManager {
             return;
         }
 
-        const players: TournamentPlayer[] = JSON.parse(tournament.players);
+        const players: TournamentPlayer[] = JSON.parse(tournament.players ?? '[]');
         const playerIndex = players.findIndex(p => p.userId === userId);
 
         if (playerIndex === -1) {
@@ -292,7 +292,7 @@ export class TournamentManager {
             return;
         }
 
-        const players: TournamentPlayer[] = JSON.parse(tournament.players);
+        const players: TournamentPlayer[] = JSON.parse(tournament.players ?? '[]');
 
         // Find winner (player with no position set)
         const winner = players.find(p => p.position === null);

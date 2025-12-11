@@ -788,7 +788,7 @@ app.get('/api/referrals/:userId', async (req, res) => {
             return tree;
         };
 
-        const tree = await buildReferralTree(user.referralCode, 1);
+        const tree = user.referralCode ? await buildReferralTree(user.referralCode, 1) : [];
 
         // Calculate stats
         const countReferrals = (nodes: any[], level: number): { total: number; byLevel: Record<number, number> } => {
@@ -847,7 +847,7 @@ app.get('/api/referrals/:userId', async (req, res) => {
                 level3Referrals: stats.byLevel[3] || 0,
                 totalEarnings,
                 thisMonthEarnings,
-                referralCode: user.referralCode,
+                referralCode: user.referralCode || null,
                 rank,
                 rankName: ['Scout', 'Agent', 'Broker', 'Partner'][rank],
                 nextRankRequirements
@@ -878,7 +878,7 @@ app.get('/api/tournaments', async (req, res) => {
 
         // Transform database tournaments to match frontend Tournament type
         const formattedTournaments = tournaments.map(t => {
-            const players = JSON.parse(t.players);
+            const players = JSON.parse(t.players ?? '[]');
             return {
                 id: t.id,
                 name: t.name,
