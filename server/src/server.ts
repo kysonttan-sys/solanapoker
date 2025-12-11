@@ -754,8 +754,9 @@ app.get('/api/referrals/:userId', async (req, res) => {
         }
 
         // Build referral tree (3 levels deep)
-        const buildReferralTree = async (referralCode: string, level: number, maxLevel: number = 3): Promise<any[]> => {
-            if (level > maxLevel) return [];
+        const buildReferralTree = async (referralCode: string | null, level: number, maxLevel: number = 3): Promise<any[]> => {
+            // If referralCode is null or we've exceeded max depth, there's nothing to build
+            if (!referralCode || level > maxLevel) return [];
 
             const referrals = await db.user.findMany({
                 where: { referredBy: referralCode },
