@@ -46,10 +46,10 @@ export class GameManager {
     }
 
     private initializeDemoTables() {
-        const demoTable = PokerEngine.initializeGame('t1', 6, 1, 2, 'cash');
+        const demoTable = PokerEngine.initializeGame('t1', 6, 1, 2, 'cash', 0, null);
         this.tables.set('t1', demoTable);
-        
-        const whaleTable = PokerEngine.initializeGame('table_whale_9', 9, 5, 10, 'cash');
+
+        const whaleTable = PokerEngine.initializeGame('table_whale_9', 9, 5, 10, 'cash', 0, null);
         this.tables.set('table_whale_9', whaleTable);
         console.log('[GameManager] Demo tables initialized');
     }
@@ -83,9 +83,10 @@ export class GameManager {
             const sb = Number(config?.smallBlind) || 1;
             const bb = Number(config?.bigBlind) || 2;
             const mode = config?.gameMode || 'cash';
-            table = PokerEngine.initializeGame(tableId, seats, sb, bb, mode);
+            const creatorId = (user && user.id && user.id !== 'spectator') ? user.id : null;
+            table = PokerEngine.initializeGame(tableId, seats, sb, bb, mode, 0, creatorId);
             this.tables.set(tableId, table);
-            if (DEBUG) console.log(`[handleJoin] Created new table ${tableId}`);
+            if (DEBUG) console.log(`[handleJoin] Created new table ${tableId} by creator ${creatorId}`);
         }
 
         socket.join(tableId);
@@ -294,18 +295,31 @@ export class GameManager {
             
             try {
                 if (mainWinner && !mainWinner.playerId.startsWith('bot_')) {
-                    const winnerUser = await db.user.findUnique({ 
+                    const winnerUser = await db.user.findUnique({
                         where: { id: mainWinner.playerId },
-                        select: { totalHands: true }
+                        select: { vipRank: true, totalHands: true }
                     });
-                    
+
                     if (winnerUser) {
-                        // Determine VIP level based on hands
-                        if (winnerUser.totalHands >= 100000) vipLevel = 4; // Legend
-                        else if (winnerUser.totalHands >= 20000) vipLevel = 3; // High Roller
-                        else if (winnerUser.totalHands >= 5000) vipLevel = 2; // Shark
-                        else if (winnerUser.totalHands >= 1000) vipLevel = 1; // Grinder
-                        else vipLevel = 0; // Fish
+                        // Use stored vipRank if set, otherwise calculate from hands
+                        if (winnerUser.vipRank > 0) {
+                            vipLevel = winnerUser.vipRank;
+                        } else {
+                            // Auto-calculate VIP level based on hands
+                            if (winnerUser.totalHands >= 100000) vipLevel = 4; // Legend
+                            else if (winnerUser.totalHands >= 20000) vipLevel = 3; // High Roller
+                            else if (winnerUser.totalHands >= 5000) vipLevel = 2; // Shark
+                            else if (winnerUser.totalHands >= 1000) vipLevel = 1; // Grinder
+                            else vipLevel = 0; // Fish
+
+                            // Update user's vipRank in database if it changed
+                            if (vipLevel > 0) {
+                                await db.user.update({
+                                    where: { id: mainWinner.playerId },
+                                    data: { vipRank: vipLevel }
+                                }).catch(e => console.error('[VIP] Error updating vipRank:', e));
+                            }
+                        }
                     }
                 }
             } catch (e) {
@@ -313,13 +327,83 @@ export class GameManager {
             }
             
             totalRake = PokerEngine.calculateRake(newState.pot, table, vipLevel);
-            
-            // Get host and referrer info (placeholder - implement table host tracking)
-            const hostTier = 0; // TODO: Track table host
-            const referrerRank = 0; // TODO: Track winner's referrer
-            
+
+            // Get host info from table creator
+            let hostTier = 0;
+            let hostUserId: string | null = null;
+            if (table.creatorId) {
+                try {
+                    const host = await db.user.findUnique({
+                        where: { id: table.creatorId },
+                        select: { hostRank: true }
+                    });
+                    if (host) {
+                        hostTier = host.hostRank || 0;
+                        hostUserId = table.creatorId;
+                    }
+                } catch (e) {
+                    console.error('[Rake] Error fetching host info:', e);
+                }
+            }
+
+            // Get referrer info from winner's referredBy field
+            let referrerRank = 0;
+            let referrerUserId: string | null = null;
+            if (mainWinner && !mainWinner.playerId.startsWith('bot_')) {
+                try {
+                    const winner = await db.user.findUnique({
+                        where: { id: mainWinner.playerId },
+                        select: { referredBy: true }
+                    });
+
+                    if (winner?.referredBy) {
+                        // Find the user who has this referral code
+                        const referrer = await db.user.findUnique({
+                            where: { referralCode: winner.referredBy },
+                            select: { id: true, referralRank: true }
+                        });
+
+                        if (referrer) {
+                            referrerRank = referrer.referralRank || 0;
+                            referrerUserId = referrer.id;
+                        }
+                    }
+                } catch (e) {
+                    console.error('[Rake] Error fetching referrer info:', e);
+                }
+            }
+
             rakeDistribution = PokerEngine.distributeRake(totalRake, hostTier, referrerRank);
-            
+
+            // Credit referrer share to referrer's balance
+            if (referrerUserId && rakeDistribution.referrer > 0) {
+                try {
+                    await db.user.update({
+                        where: { id: referrerUserId },
+                        data: { balance: { increment: rakeDistribution.referrer } }
+                    });
+                    console.log(`[Rake] Credited $${rakeDistribution.referrer.toFixed(2)} to referrer ${referrerUserId}`);
+                } catch (e) {
+                    console.error('[Rake] Error crediting referrer:', e);
+                }
+            }
+
+            // Credit host share to host's balance
+            if (hostUserId && rakeDistribution.host > 0) {
+                try {
+                    await db.user.update({
+                        where: { id: hostUserId },
+                        data: {
+                            balance: { increment: rakeDistribution.host },
+                            hostEarnings: { increment: rakeDistribution.host }
+                        }
+                    });
+                    console.log(`[Rake] Credited $${rakeDistribution.host.toFixed(2)} to host ${hostUserId}`);
+                } catch (e) {
+                    console.error('[Rake] Error crediting host:', e);
+                }
+            }
+
             // Save rake distribution to database
             try {
                 // @ts-ignore - rakeDistribution model may not be in Prisma types yet
@@ -328,8 +412,10 @@ export class GameManager {
                         handId: table.handNumber?.toString() || '0',
                         totalRake,
                         hostShare: rakeDistribution.host,
+                        hostUserId,
                         hostTier,
                         referrerShare: rakeDistribution.referrer,
+                        referrerUserId,
                         referrerRank,
                         jackpotShare: rakeDistribution.jackpot,
                         globalPoolShare: rakeDistribution.globalPool,

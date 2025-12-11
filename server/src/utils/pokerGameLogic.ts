@@ -49,6 +49,7 @@ export interface GameState {
   tableId: string;
   gameMode: 'cash' | 'tournament' | 'fun';
   maxSeats: 6 | 9;
+  creatorId: string | null; // Table creator's user ID for Host-to-Earn attribution
   players: PlayerState[];
   pot: number;
   communityCards: CardData[];
@@ -96,11 +97,12 @@ export class PokerEngine {
     return deck;
   }
 
-  static initializeGame(tableId: string, maxSeats: 6 | 9, smallBlind: number, bigBlind: number, gameMode: 'cash' | 'tournament' | 'fun' = 'cash', prizePool = 0): GameState {
+  static initializeGame(tableId: string, maxSeats: 6 | 9, smallBlind: number, bigBlind: number, gameMode: 'cash' | 'tournament' | 'fun' = 'cash', prizePool = 0, creatorId: string | null = null): GameState {
     return {
       tableId,
       gameMode,
       maxSeats,
+      creatorId,
       players: [],
       pot: 0,
       communityCards: [],

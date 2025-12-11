@@ -1,5 +1,6 @@
 import { db } from './db';
 import cron from 'node-cron';
+import crypto from 'crypto';
 
 /**
  * Distribution Manager
@@ -23,6 +24,24 @@ export class DistributionManager {
             DistributionManager.instance = new DistributionManager();
         }
         return DistributionManager.instance;
+    }
+
+    /**
+     * Cryptographically secure Fisher-Yates shuffle
+     * Uses crypto.randomBytes() instead of Math.random() for true randomness
+     */
+    private cryptoShuffle<T>(array: T[]): T[] {
+        const shuffled = [...array]; // Create a copy to avoid mutation
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            // Generate cryptographically secure random number
+            const randomBytes = crypto.randomBytes(4);
+            const randomInt = randomBytes.readUInt32BE(0);
+            const j = randomInt % (i + 1);
+
+            // Swap elements
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
     }
 
     private async initializeBalances() {
@@ -307,7 +326,7 @@ export class DistributionManager {
             if (allActivePlayers.length > 0) {
                 // Randomly select 10 winners (or all if less than 10)
                 const luckyWinnerCount = Math.min(10, allActivePlayers.length);
-                const shuffled = allActivePlayers.sort(() => Math.random() - 0.5);
+                const shuffled = this.cryptoShuffle(allActivePlayers);
                 const luckyWinners = shuffled.slice(0, luckyWinnerCount);
                 
                 const sharePerLuckyWinner = luckyDrawShare / luckyWinnerCount;

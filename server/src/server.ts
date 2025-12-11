@@ -5,6 +5,8 @@ import path from 'path';
 import fs from 'fs';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+import validator from 'validator';
 import { GameManager } from './gameManager';
 import { db } from './db';
 import { distributionManager } from './distributionManager';
@@ -24,6 +26,24 @@ const app = express();
 app.use(cors() as any);
 app.use(express.json({ limit: '10mb' })); // Increase limit for image uploads
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// Rate limiting middleware
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: 'Too many requests from this IP, please try again later',
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
+const strictLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // Limit to 20 requests per windowMs for sensitive endpoints
+    message: 'Too many requests, please try again later',
+});
+
+// Apply rate limiting to all API routes
+app.use('/api/', apiLimiter);
 
 // Serve static files from the built frontend (only if dist exists)
 const distPath = path.join(__dirname, '../../dist');
@@ -1071,10 +1091,18 @@ io.on('connection', (socket) => {
     });
 
     socket.on('sendChatMessage', ({ tableId, message, user }) => {
-        io.to(tableId).emit('newChatMessage', { 
+        // Sanitize message to prevent XSS attacks
+        const sanitizedMessage = validator.escape(message.trim().substring(0, 200)); // Max 200 chars
+        const sanitizedUsername = validator.escape(user.username.substring(0, 20)); // Max 20 chars
+
+        if (sanitizedMessage.length === 0) {
+            return; // Ignore empty messages
+        }
+
+        io.to(tableId).emit('newChatMessage', {
             id: Date.now().toString(),
-            text: message,
-            sender: user.username,
+            text: sanitizedMessage,
+            sender: sanitizedUsername,
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
     });

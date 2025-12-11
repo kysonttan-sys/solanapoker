@@ -65,6 +65,7 @@ export interface GameState {
   tableId: string;
   gameMode: 'cash' | 'tournament' | 'fun';
   maxSeats: 6 | 9;
+  creatorId?: string | null; // Table creator's user ID for Host-to-Earn attribution
   players: PlayerState[];
   pot: number;
   communityCards: CardData[];
