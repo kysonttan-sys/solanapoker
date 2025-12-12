@@ -351,7 +351,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({ tables, user, onVerify, onBa
                     </h1>
                     <div className="flex items-center gap-3">
                         <span className="text-[10px] text-gray-400 font-mono bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
-                            {gameState.gameMode === 'cash' ? `$${gameState.smallBlind}/$${gameState.bigBlind}` : `Level ${gameState.tournamentDetails?.level}`}
+                            {gameState.gameMode === 'cash' ? `$${gameState.smallBlind}/$${gameState.bigBlind}` : `${gameState.smallBlind}/${gameState.bigBlind}`}
                         </span>
                         {status === 'connected' ? (
                             <span className="flex items-center gap-1 text-[10px] text-green-500 font-bold"><Wifi size={8}/> Live</span>

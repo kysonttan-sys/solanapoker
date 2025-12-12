@@ -65,8 +65,6 @@ export interface PokerTable {
   password?: string;
 }
 
-// Tournament interface removed - feature not ready for production
-
 export interface GameStats {
   totalHands: number;
   winRate: number; // bb/100

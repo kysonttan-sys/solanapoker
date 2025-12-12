@@ -1,247 +1,115 @@
-# 🎰 Complete Rake Distribution System
+ # 🎰 Rake Distribution Guide — Combined & Concise
 
-## Overview
-Your Solana Poker platform has a comprehensive 5-way rake distribution system with automatic distributions for Global Partner Pool and Monthly Jackpot.
+ This document consolidates the full rake distribution specification, implementation notes, examples, and testing instructions so you can show AI or teammates how the system works.
 
----
+ ## 1 — Concise Summary
 
-## 💰 Rake Calculation
+ - Base Rake: 3–5% of pot depending on VIP level (capped per-hand).
+ - VIP Levels (rake / cap):
+   - Fish (0): 5% / $5
+  ---
 
-### VIP Levels & Rake Rates
-| VIP Level | Rake % | Cap per Hand |
-|-----------|--------|--------------|
-| **Fish** (Level 0) | 5.0% | $5 |
-| **Grinder** (Level 1) | 4.5% | $4.50 |
-| **Shark** (Level 2) | 4.0% | $4 |
-| **High Roller** (Level 3) | 3.5% | $3.50 |
-| **Legend** (Level 4) | 3.0% | $3 |
+  # 🎯 Rake Distribution — One‑Page Final Logic (AI‑ready)
 
-**Example:** $100 pot at Legend level = $3 rake (capped at 3%)
+  Purpose: single‑page specification of how rake is calculated and distributed. Contains the final, confirmed rules you approved (waterfall referral logic, partner weighting by rake, audit fields, and safety guards).
 
----
+  1) Base Rake (per hand)
+  - Rake rates depend on VIP level (by `totalHands`): Fish 0 / Grinder 1k / Shark 5k / High Roller 20k / Legend 100k.
+  - Rake percents: [5%, 4.5%, 4%, 3.5%, 3%], each level has a per‑hand cap (see code `VIP_LEVELS`).
 
-## 📊 5-Way Distribution Breakdown
+  2) Protocol split (applies to the computed total rake)
+  - Host share: hostTier% (30% → 40%)
+  - Referrer payouts: waterfall / difference method (see section 4)
+  - Jackpot: 5% (accumulates to monthly jackpot)
+  - Global Partner Pool: 5% (accumulates and distributes by teamRake)
+  - Developer: remainder = rake − (host + referrals + jackpot + globalPool)
 
-### 1. **Host Revenue** (30-40%)
-- **Who**: Table host who created the game
-- **Amount**: Based on host tier
-  - Tier 0 (Dealer): 30%
-  - Tier 1 (Pit Boss): 32.5%
-  - Tier 2 (Floor Manager): 35%
-  - Tier 3 (Casino Director): 37.5%
-  - Tier 4 (Casino Mogul): 40%
-- **Payment**: Instant - Added to host's balance after each hand
+  3) Global Partner Pool weighting
+  - Use `teamRakeWindow` (recommended): for every hand, increment `teamRakeWindow` by the rake amount for each ancestor in the referral chain.
+  - When pool balance >= threshold (e.g., $100) distribute proportionally by `teamRakeWindow` and reset `teamRakeWindow` to 0 for each partner.
 
-### 2. **Referrer Commission** (5-20%)
-- **Who**: User who referred the players
-- **Amount**: Based on referrer rank
-  - Rank 0 (Scout): 5%
-  - Rank 1 (Recruiter): 10%
-  - Rank 2 (Agent): 15%
-  - Rank 3 (Partner): 20%
-- **Payment**: Instant - Added to referrer's balance after each hand
+  4) Waterfall referral logic (confirmed)
+  - Direct referrer receives their full rank percent (e.g., Agent 10%, Broker 15%, Partner 20%).
+  - For uplines, pay only the difference between their rank percent and the highest percent already paid below them.
+  - Walk the referral chain upward (unlimited) until no further difference to pay or chain ends. Defensive guard: `maxDepth = 100` to avoid cycles.
+  - If every rank in the chain is 0% → no referral payments; developer keeps remainder.
 
-### 3. **Monthly Jackpot** (5%) 🎁
-- **Accumulation**: Added automatically from every rake collection
-- **Distribution**: **1st day of every month at 00:00 UTC**
-- **Split**:
-  - **30%** → Top 3 Players by hands played
-    - 1st Place: 50% of this pool
-    - 2nd Place: 30% of this pool
-    - 3rd Place: 20% of this pool
-  - **30%** → Top 3 Earners by total winnings
-    - 1st Place: 50% of this pool
-    - 2nd Place: 30% of this pool
-    - 3rd Place: 20% of this pool
-  - **40%** → 10 Lucky Random Winners (must have played ≥10 hands)
-    - Equal split among winners
+  Algorithm (per hand):
+  1. Compute `rake` (apply VIP rate + cap). For side pots, compute per side pot.
+  2. Compute hostShare, jackpotShare (5%), globalPoolShare (5%).
+  3. Build referrer chain starting at direct referrer. Set `highestPaid = 0`.
+  4. For each referrer in chain:
+     - `payPercent = max(0, referrerPercent − highestPaid)`
+     - `payAmount = (payPercent / 100) * rake`
+     - credit `payAmount` to referrer, log transaction with `level` and `recipientRank`
+     - `highestPaid = max(highestPaid, referrerPercent)`
+  5. `developerShare = rake − (hostShare + jackpotShare + globalPoolShare + sum(referrerPayments))` (clamped ≥ 0)
 
-### 4. **Global Partner Pool** (5%) 🌍
-- **Accumulation**: Added automatically from every rake collection
-- **Distribution**: **Automatically when pool reaches $100**
-- **Recipients**: **All Rank 3 Partners ONLY**
-- **Split Method**: Proportional to team activity (based on `hostRevenue`)
-  - If no activity tracked: Equal distribution
+  5) Data model & audit (minimum requirements)
+  - Add to `User` (Prisma): `teamRakeWindow Float @default(0)` (windowed counter reset after each Global Pool distribution).
+  - Record every level payment as a `transaction` with metadata:
+    - `type`: `RAKE_REFERRER` or `RAKE_REFERRER_OVERRIDE`
+    - `level`: integer (1 = direct)
+    - `recipientRank`: referrer's rank at payment time
+    - `sourceHandId`: hand identifier
+    - `amount`, `createdAt`
+  - Keep `RakeDistribution.referrerShare` as aggregate; per-level `transaction` rows provide the audit trail.
 
-### 5. **Developer** (Remainder)
-- **Amount**: Remaining after all allocations (typically 30-50%)
-- **Purpose**: Platform maintenance, development, operations
-- **Payment**: Instant - Added to developer wallet
+  6) Edge cases & defensive rules
+  - Side pots: compute rake per side pot separately and run the waterfall per pot/winner.
+  - Rounding: use `safeMoney()` (4 decimal places) consistently across all calculations.
+  - Max chain depth: `maxDepth = 100`.
+  - Fraud mitigations (optional): only count teamRakeWindow from accounts with >= X hands, delayed vesting, or min payout thresholds.
 
----
+  7) Examples (short)
+  - Bob direct referrer = 15%, Alice upline = 20% ⇒ Bob 15%, Alice (20−15)=5% ⇒ total 20%.
+  - Direct referrer Alice = 20% ⇒ Alice gets full 20% (no uplines paid).
+  - No ranks in chain ⇒ no referral payouts; developer keeps remainder.
 
-## 🔄 Automatic Distribution Systems
+  8) Implementation pointers (where code lives)
+  - `server/src/utils/pokerGameLogic.ts` — `calculateRake`, VIP caps.
+  - `server/src/gameManager.ts` — per‑hand flow: compute rake, run waterfall, credit balances, increment `teamRakeWindow`.
+  - `server/src/distributionManager.ts` — `distributeGlobalPool()` should use `teamRakeWindow` and reset it after distribution.
+  - `constants.ts` — VIP/Host/Referral tiers and percents.
 
-### Global Partner Pool Auto-Share
-```typescript
-// Triggers automatically when pool reaches $100
-- Finds all Rank 3 Partners
-- Calculates proportional share based on team activity
-- Distributes instantly to partner wallets
-- Records as GLOBAL_POOL_SHARE transaction
-- Resets pool to $0
-```
+  9) Next steps (recommended)
+  - Apply a small Prisma migration to add `teamRakeWindow`.
+  - Implement waterfall logic and per‑level `transaction` logging in `gameManager.handleWinners()`.
+  - Update `distributionManager.distributeGlobalPool()` to use `teamRakeWindow` and reset windows after distribution.
+  - Add unit tests for: Alice/Bob/Agent waterfall flows, side‑pot rake distribution, and global pool distribution reconciliations.
 
-**Example Distribution:**
-- Pool Balance: $100
-- Partner A has 40% team activity → Gets $40
-- Partner B has 35% team activity → Gets $35
-- Partner C has 25% team activity → Gets $25
+  ---
 
-### Monthly Jackpot Distribution
-```typescript
-// Runs on 1st day of every month at 00:00 UTC
-- Distributes accumulated jackpot (5% of all rake)
-- 30% to Top 3 Players (by hands played) - Tiered
-- 30% to Top 3 Earners (by total winnings) - Tiered
-- 40% to 10 Lucky Winners (random draw) - Equal split
-```
+  This single page is intended to be shown to AI or team members as the authoritative, final specification for rake and referral distribution. If you approve, I will prepare the Prisma migration and the code patch implementing these rules.
 
-**Example Distribution ($1000 Jackpot):**
-- **Top Players** ($300):
-  - 1st Place: $150 (50%)
-  - 2nd Place: $90 (30%)
-  - 3rd Place: $60 (20%)
-- **Top Earners** ($300):
-  - 1st Place: $150 (50%)
-  - 2nd Place: $90 (30%)
-  - 3rd Place: $60 (20%)
-- **Lucky Draw** ($400): $40 each to 10 random winners
 
----
+ - Use `distributionManager.manualDistributeGlobalPool()` and `manualDistributeJackpot()` for testing.
+ - To simulate a hand and inspect `RakeDistribution` and user balances, run the server in dev and execute a controlled hand via the GameManager (or write a small script that invokes `PokerEngine` + `gameManager.handleWinners()` flow).
 
-## 💡 Real Example
+ ## 9 — Recommendations & Next Steps
 
-### Hand Details
-- **Pot**: $100
-- **Winner VIP Level**: Legend (3%)
-- **Host Tier**: Floor Manager (35%)
-- **Referrer Rank**: Agent (15%)
+ - If you want multi-level referral overrides (as in your example), decide on:
+   - Override percentages per level (e.g., level-2 = 5%, level-3 = 5%) and funding source (developer remainder or capped referral pool).
+   - Audit schema changes (add `referralPayments` table / expand `RakeDistribution` to capture multi-level breakdown).
+ - Consider tracking per-user `teamRakeGenerated` so Global Partner Pool distributions are proportional to actual team rake (not `totalWinnings`).
+ - Add a `postinstall` script to `server/package.json` to ensure `npx prisma generate` runs on deployment.
 
-### Rake Calculation
-```
-Total Rake: $100 × 3% = $3.00
-```
+## Final Decisions — Confirmed
 
-### Distribution
-```
-1. Host (35%):           $1.05 ✅ Paid instantly
-2. Referrer (15%):       $0.45 ✅ Paid instantly
-3. Jackpot (5%):         $0.15 🎰 Distributes 1st of month
-4. Global Pool (5%):     $0.15 🌍 Auto-shares to Rank 3 Partners at $100
-5. Developer (40%):      $1.20 ✅ Paid instantly
-─────────────────────────────
-Total Distributed:       $3.00 ✓
-```
+The following choices are now finalized and should be implemented exactly as written below. These reflect your requirements and the recommended safe defaults.
 
----
+- Waterfall referral payouts: use the waterfall/difference method so the total referral payout for any hand never exceeds the highest upline percent (max 20%). Direct referrers receive their full rank percent; uplines receive only the difference to the next higher rank.
+- Attribution to uplines: attribute rake to every ancestor in the referral chain (each ancestor's `teamRakeWindow` is incremented by the rake amount for that hand). This ensures Partners are credited for their entire subtree's rake.
+- Global Partner Pool metric: use `teamRakeWindow` (windowed counter) to accumulate team rake between distributions. Reset the window counter for each partner after a Global Pool distribution to give deterministic, auditable windows.
+- Rounding & money precision: use the existing `safeMoney()` behavior (4 decimal rounding/truncation to cents as used elsewhere) for all rake and payout calculations to ensure consistent accounting.
+- Chain depth / safety guard: allow unlimited chain traversal in normal operation but enforce a defensive safety guard of `maxDepth = 100` to avoid infinite loops in case of corrupted or cyclic referral data.
+- Developer fallback: if the entire referral chain contains no ranks (all 0%), no referral payments are made and developer remainder remains unchanged.
 
-## 📈 Database Tracking
+These decisions will be used to update the implementation and the database schema (add `teamRakeWindow` to the `User` model) once you approve applying code changes.
 
-Every rake distribution is logged in the database with full audit trail:
+ ---
 
-```typescript
-RakeDistribution {
-  handId: "unique_hand_id",
-  totalRake: 3.00,
-  hostShare: 1.05,
-  hostUserId: "host_wallet_address",
-  hostTier: 2,
-  referrerShare: 0.45,
-  referrerUserId: "referrer_wallet_address",
-  referrerRank: 2,
-  jackpotShare: 0.15,
-  globalPoolShare: 0.15,
-  developerShare: 1.20,
-  createdAt: "2025-12-09T..."
-}
-```
-
----
-
-## 🎯 Transaction Types
-
-The system tracks these transaction types:
-- `RAKE_HOST` - Host revenue payment
-- `RAKE_REFERRER` - Referrer commission payment
-- `GLOBAL_POOL_SHARE` - Partner pool distribution
-- `JACKPOT_TOP_PLAYER` - Top player jackpot win
-- `JACKPOT_TOP_EARNER` - Top earner jackpot win
-- `JACKPOT_LUCKY_DRAW` - Lucky winner jackpot win
-
----
-
-## 🚀 How It Works in Practice
-
-### Every Hand:
-1. Game ends, winners determined
-2. Rake calculated based on VIP level
-3. **Instant Distributions:**
-   - Host gets their %
-   - Referrer gets their %
-   - Developer gets their %
-4. **Accumulation:**
-   - 5% added to Jackpot
-   - 5% added to Global Partner Pool
-5. All recorded in database
-
-### When Global Pool Reaches $100:
-- Automatically triggers distribution
-- All Rank 3 Partners get their proportional share
-- Pool resets to $0
-- Partners receive instant notification
-
-### On 1st Day of Every Month:
-- Cron job triggers at 00:00 UTC
-- Jackpot distributed to:
-  - Top 3 players by hands
-  - Top 3 earners by winnings
-  - 10 random lucky winners
-- Jackpot resets to $0
-- All winners receive instant payment
-
----
-
-## 🔧 Manual Testing
-
-For development/testing, you can manually trigger distributions:
-
-```typescript
-import { distributionManager } from './distributionManager';
-
-// Manually distribute Global Partner Pool
-await distributionManager.manualDistributeGlobalPool();
-
-// Manually distribute Monthly Jackpot
-await distributionManager.manualDistributeJackpot();
-
-// Check current balances
-const balances = distributionManager.getBalances();
-console.log(balances); // { globalPool: 150.50, jackpot: 250.75 }
-```
-
----
-
-## 📅 Distribution Schedule
-
-| Event | Frequency | Trigger |
-|-------|-----------|---------|
-| Host Revenue | Instant | Every hand |
-| Referrer Commission | Instant | Every hand |
-| Developer Share | Instant | Every hand |
-| **Global Partner Pool** | **Auto at $100** | **Automatic** |
-| **Monthly Jackpot** | **Monthly** | **1st day 00:00 UTC** |
-
----
-
-## ✅ System Status
-
-- ✅ Rake calculation with VIP levels
-- ✅ 5-way distribution working
-- ✅ Database tracking complete
-- ✅ Global Partner Pool auto-distribution
-- ✅ Monthly Jackpot scheduled distribution
-- ✅ Cron jobs active
-- ✅ Full audit trail
-
-**The system is production-ready!** 🎉
+ This combined guide should be a single reference you can show to AI or teammates. Tell me if you want me to:
+ - Add the multi-level override implementation (I can implement and test), or
+ - Add a one-page investor/ops summary, or
+ - Create a small simulation script that demonstrates the Alice/Bob/Agent scenario with sample numbers.

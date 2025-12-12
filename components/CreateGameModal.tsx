@@ -54,7 +54,6 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
 
       let estimatedRevenue = 0;
 
-      // Only CASH games now (tournament removed)
       // 1. Hands Per Hour Estimation based on Speed AND Seats
       // 6-max is faster than 9-max due to fewer players acting.
       let handsPerHour = 0;

@@ -222,7 +222,6 @@ const AppContent: React.FC = () => {
   };
 
   const handleGameCreated = (newGame: PokerTable, type: GameType) => {
-    // Only Cash and Fun games supported now (tournaments removed)
     setTables(prev => [newGame, ...prev]);
     setCreateModalOpen(false);
   };

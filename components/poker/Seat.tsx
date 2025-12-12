@@ -17,7 +17,7 @@ interface SeatProps {
   fourColor?: boolean;
   showBB?: boolean;
   bigBlind?: number;
-  gameType?: 'cash' | 'tournament' | 'fun';
+  gameType?: 'cash' | 'fun';
 }
 
 export const Seat: React.FC<SeatProps> = ({ 

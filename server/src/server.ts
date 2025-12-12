@@ -528,12 +528,9 @@ app.get('/api/user/:id/stats', async (req, res) => {
                 totalLosses,
                 winRate: parseFloat(winRate as string),
                 hands: handsPlayed,
-                tournamentsWon: 0, // TODO: Track tournaments
-                tournamentsPlayed: 0,
                 trendWinnings,
                 trendWinRate: 'N/A',
                 trendHands: 'N/A',
-                trendTourney: 'N/A',
                 vpip,
                 pfr,
                 bestHand,
@@ -860,14 +857,22 @@ app.get('/api/referrals/:userId', async (req, res) => {
             const directBrokers = directRefs.filter(ref => ref.referralRank >= 2).length;
 
             // Determine rank based on criteria
+            // Priority: Partner > Broker > Agent > Scout
+            // Scout requirement updated: at least ONE direct referral with 100+ hands
+            const directsWith100Hands = directRefs.filter(ref => ref.totalHands >= 100).length;
+
             if (directBrokers >= 3) {
                 calculatedRank = 3; // Partner
             } else if (directAgents >= 3) {
                 calculatedRank = 2; // Broker
             } else if (directsWith1000Hands >= 3) {
                 calculatedRank = 1; // Agent
+            } else if (directsWith100Hands >= 1) {
+                calculatedRank = 0; // Scout (now requires 1 direct with 100+ hands)
             } else {
-                calculatedRank = 0; // Scout
+                // No qualifying referrals yet — keep as Scout (0) visually, but
+                // front-end/UI can show this as "None" until the Scout requirement met.
+                calculatedRank = 0;
             }
         }
 
@@ -945,10 +950,6 @@ app.get('/api/tables', (req, res) => {
     const tables = gameManager.getAllTables();
     res.json(tables);
 });
-
-// ===============================
-// TOURNAMENT ENDPOINTS - REMOVED (Feature not ready)
-// ===============================
 
 // 5. Current fairness state — returns current hand fairness data
 app.get('/api/proof/:tableId/current', (req, res) => {

@@ -24,7 +24,7 @@ export const BuyInModal: React.FC<BuyInModalProps> = ({ isOpen, onClose, onConfi
 
   useEffect(() => {
     if (isOpen) {
-        // If fixed (tournament), set to min. Else default logic.
+        // If fixed buy-in, set to min. Else default logic.
         if (isFixedBuyIn) {
             setAmount(min);
         } else {
@@ -48,7 +48,7 @@ export const BuyInModal: React.FC<BuyInModalProps> = ({ isOpen, onClose, onConfi
   const bbCount = (amount / bigBlind).toFixed(1);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isFixedBuyIn ? "Tournament Entry" : "Buy In"} hideClose={isDepositing}>
+    <Modal isOpen={isOpen} onClose={onClose} title={isFixedBuyIn ? "Fixed Buy In" : "Buy In"} hideClose={isDepositing}>
       <form onSubmit={handleConfirm} className="space-y-6">
         <div className="space-y-4">
             <div className="flex justify-between items-center text-sm">

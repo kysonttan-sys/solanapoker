@@ -28,8 +28,6 @@ export interface PlayerState {
   handResult?: HandResult;
   winningHand?: CardData[];
   totalHands?: number;
-  finishRank?: number;
-  finishWinnings?: number;
 }
 
 export type GamePhase = 'pre-flop' | 'flop' | 'turn' | 'river' | 'showdown';
@@ -47,7 +45,7 @@ export interface FairnessState {
 
 export interface GameState {
   tableId: string;
-  gameMode: 'cash' | 'tournament' | 'fun';
+  gameMode: 'cash' | 'fun';
   maxSeats: 6 | 9;
   creatorId: string | null; // Table creator's user ID for Host-to-Earn attribution
   players: PlayerState[];
@@ -67,7 +65,6 @@ export interface GameState {
   lastAggressorId?: string;
   handNumber: number;
   rakeCap?: number;
-  tournamentDetails?: any;
   lastHand?: any;
 }
 
@@ -76,7 +73,6 @@ export const RANKS: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J',
 
 // Helper to sanitize money
 const safeMoney = (amount: number, gameMode: string) => {
-    if (gameMode === 'tournament') return Math.floor(amount);
     const fixed = Number(amount.toFixed(4));
     return Math.floor(fixed * 100) / 100;
 };
@@ -97,7 +93,7 @@ export class PokerEngine {
     return deck;
   }
 
-  static initializeGame(tableId: string, maxSeats: 6 | 9, smallBlind: number, bigBlind: number, gameMode: 'cash' | 'tournament' | 'fun' = 'cash', prizePool = 0, creatorId: string | null = null): GameState {
+  static initializeGame(tableId: string, maxSeats: 6 | 9, smallBlind: number, bigBlind: number, gameMode: 'cash' | 'fun' = 'cash', creatorId: string | null = null): GameState {
     return {
       tableId,
       gameMode,
@@ -695,7 +691,7 @@ export class PokerEngine {
   }
 
   static calculateRake(potAmount: number, state: GameState, vipLevel?: number): number {
-      if (state.gameMode !== 'cash') return 0; // No rake in tournaments/fun
+      if (state.gameMode !== 'cash') return 0; // No rake in fun games
       if (potAmount <= 0) return 0;
 
       // VIP Levels from constants.ts

@@ -1,5 +1,5 @@
 
-import { PokerTable, Speed, Tournament, GameStats, User, GameType } from './types';
+import { PokerTable, Speed, GameStats, User, GameType } from './types';
 
 export const APP_NAME = "SOLPOKER X";
 
@@ -71,8 +71,8 @@ export const REFERRAL_TIERS = [
     name: 'Scout', 
     commission: 5, 
     color: 'text-gray-400', 
-    req: 'Active Player (1+ Hand)',
-    nextReq: 'Recruit 3 Friends + 100 Team Hands'
+    req: 'Referral one active player with 100+ Hands',
+    nextReq: 'Recruit 3 Directs with 1,000+ Hands each'
   },
   { 
     rank: 1, 
@@ -242,47 +242,12 @@ export const MOCK_TABLES: PokerTable[] = [
   }
 ];
 
-export const MOCK_TOURNAMENTS: Tournament[] = [
-  {
-    id: 'tour1',
-    name: 'Solana Sunday Million',
-    buyIn: 100,
-    prizePool: 50000,
-    registeredPlayers: 342,
-    maxPlayers: 1000,
-    startTime: new Date(Date.now() + 86400000).toISOString(),
-    speed: Speed.REGULAR,
-    status: 'REGISTERING',
-    winnersCount: '150',
-    distribution: 'Standard',
-    startingChips: 10000,
-    seats: 9
-  },
-  {
-    id: 'tour2',
-    name: 'Daily Hyper',
-    buyIn: 10,
-    prizePool: 2000,
-    registeredPlayers: 150,
-    maxPlayers: 200,
-    startTime: new Date(Date.now() + 3600000).toISOString(),
-    speed: Speed.HYPER,
-    status: 'REGISTERING',
-    winnersCount: '20',
-    distribution: 'Top 10%',
-    startingChips: 5000,
-    seats: 6
-  }
-];
-
 export const MOCK_STATS: GameStats = {
   totalHands: 15420, // This puts the mock user in 'Shark' tier
   winRate: 5.4,
   totalWinnings: 12450.00,
   roi: 12.5,
-  bestHand: 'Royal Flush',
-  tournamentsPlayed: 45,
-  tournamentsWon: 3
+  bestHand: 'Royal Flush'
 };
 
 // Added ecosystemEarnings and networkVolume for Leaderboard toggles

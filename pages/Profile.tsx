@@ -31,67 +31,51 @@ const STATS_BY_TIMEFRAME: any = {
     winnings: 0,
     winRate: 0,
     hands: 0,
-    tournamentsWon: 0,
-    tournamentsPlayed: 0,
     trendWinnings: '0%',
     trendWinRate: '0',
     trendHands: '0',
-    trendTourney: '0% ITM',
     handsDistribution: { royal: 0, straightFlush: 0, quads: 0, fullHouse: 0 }
   },
   '1M': {
     winnings: 0,
     winRate: 0,
     hands: 0,
-    tournamentsWon: 0,
-    tournamentsPlayed: 0,
     trendWinnings: '0%',
     trendWinRate: '0',
     trendHands: '0',
-    trendTourney: '0% ITM',
     handsDistribution: { royal: 0, straightFlush: 0, quads: 0, fullHouse: 0 }
   },
   '3M': {
     winnings: 0,
     winRate: 0,
     hands: 0,
-    tournamentsWon: 0,
-    tournamentsPlayed: 0,
     trendWinnings: '0%',
     trendWinRate: '0',
     trendHands: '0',
-    trendTourney: '0% ITM',
     handsDistribution: { royal: 0, straightFlush: 0, quads: 0, fullHouse: 0 }
   },
   'YTD': {
     winnings: 0,
     winRate: 0,
     hands: 0,
-    tournamentsWon: 0,
-    tournamentsPlayed: 0,
     trendWinnings: 'N/A',
     trendWinRate: 'N/A',
     trendHands: 'N/A',
-    trendTourney: 'N/A',
     handsDistribution: { royal: 0, straightFlush: 0, quads: 0, fullHouse: 0 }
   },
   'ALL': {
     winnings: 0,
     winRate: 0,
     hands: 0,
-    tournamentsWon: 0,
-    tournamentsPlayed: 0,
     trendWinnings: 'N/A',
     trendWinRate: 'N/A',
     trendHands: 'N/A',
-    trendTourney: 'N/A',
     handsDistribution: { royal: 0, straightFlush: 0, quads: 0, fullHouse: 0 }
   }
 };
 
 const PIE_DATA = [
-  { name: 'Cash Games', value: 65 },
-  { name: 'Tournaments', value: 35 },
+  { name: 'Cash Games', value: 100 },
 ];
 
 const POSITION_DATA = [
@@ -111,7 +95,7 @@ const MOCK_HISTORY = [
     { id: 'tx2', type: 'game_win', amount: 1250.50, asset: 'USDT', date: 'Yesterday', status: 'completed', desc: 'Cash Game #t1' },
     { id: 'tx3', type: 'referral', amount: 45.20, asset: 'USDT', date: 'Yesterday', status: 'completed', desc: 'Commission (Tier 2)' },
     { id: 'tx4', type: 'withdrawal', amount: -2000, asset: 'USDT', date: '3 days ago', status: 'completed', hash: '8z...1b4' },
-    { id: 'tx5', type: 'game_loss', amount: -200, asset: 'USDT', date: '4 days ago', status: 'completed', desc: 'Tournament Entry' },
+    { id: 'tx5', type: 'game_loss', amount: -200, asset: 'USDT', date: '4 days ago', status: 'completed', desc: 'Cash Game Loss' },
 ];
 
 interface ProfileProps {
@@ -226,9 +210,7 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
           ...MOCK_STATS,
           totalWinnings: leaderboardUser.winnings,
           totalHands: leaderboardUser.hands,
-          winRate: parseFloat((Math.random() * 10).toFixed(1)),
-          tournamentsPlayed: Math.floor(Math.random() * 50),
-          tournamentsWon: Math.floor(Math.random() * 5)
+          winRate: parseFloat((Math.random() * 10).toFixed(1))
         });
       } else {
          navigate('/'); // User not found
@@ -391,7 +373,7 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
   const handleCopyReferral = () => {
      if (profileForm?.referralCode) {
         const url = `${window.location.origin}/#/ref/${profileForm.referralCode}`;
-        const message = `🚀 Join me on SOLPOKER X! The fair, decentralized poker platform on Solana.\n\n♣️ Play Cash Games & Tournaments\n💰 Earn as Host or Referrer\n\nJoin here: ${url}`;
+        const message = `🚀 Join me on SOLPOKER X! The fair, decentralized poker platform on Solana.\n\n♣️ Play Cash Games & Fun Games\n💰 Earn as Host or Referrer\n\nJoin here: ${url}`;
         
         navigator.clipboard.writeText(message);
         alert(`Referral Content Copied!\n\n"${message}"`);
@@ -924,19 +906,18 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
                     positive={!currentStats.trendWinRate.includes('-')} 
                     icon={<Target size={20} className="text-sol-purple"/>}
                     />
-                    <StatCard 
-                    title="Hands Played" 
-                    value={currentStats.hands.toLocaleString()} 
-                    trend={currentStats.trendHands} 
-                    positive 
+                    <StatCard
+                    title="Hands Played"
+                    value={currentStats.hands.toLocaleString()}
+                    trend={currentStats.trendHands}
+                    positive
                     icon={<Clock size={20} className="text-sol-blue"/>}
                     />
-                    <StatCard 
-                    title="Tournaments Won" 
-                    value={currentStats.tournamentsWon.toString()} 
-                    subValue={`/${currentStats.tournamentsPlayed}`} 
-                    trend={currentStats.trendTourney} 
-                    positive 
+                    <StatCard
+                    title="Best Hand"
+                    value={currentStats.bestHand || 'N/A'}
+                    trend="Lifetime"
+                    positive
                     icon={<Trophy size={20} className="text-yellow-500"/>}
                     />
                  </div>

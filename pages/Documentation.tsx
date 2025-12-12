@@ -140,10 +140,6 @@ export const Documentation: React.FC = () => {
                                     <span className="text-gray-300">Cash Game Rake</span>
                                     <span className="text-sol-green font-bold font-mono">3% - 5% (Capped)</span>
                                 </li>
-                                <li className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-                                    <span className="text-gray-300">Tournament Fee</span>
-                                    <span className="text-sol-green font-bold font-mono">5% - 10%</span>
-                                </li>
                             </ul>
                         </div>
 

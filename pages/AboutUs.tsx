@@ -26,7 +26,7 @@ export const AboutUs: React.FC = () => {
     {
       icon: <Users size={32} className="text-yellow-500" />,
       title: "Host-to-Earn",
-      desc: "Be the House. Unique to SOLPOKER X, anyone can create a table or tournament and earn up to 40% of the rake generated. Run your own club without the infrastructure costs."
+      desc: "Be the House. Unique to SOLPOKER X, anyone can create a table and earn up to 40% of the rake generated. Run your own club without the infrastructure costs."
     },
     {
       icon: <Network size={32} className="text-orange-500" />,
@@ -111,7 +111,7 @@ export const AboutUs: React.FC = () => {
       <div className="text-center space-y-6 pt-8 border-t border-white/5">
            <h2 className="text-2xl font-bold text-white">Join the Community</h2>
            <p className="text-gray-400 max-w-xl mx-auto">
-               SOLPOKER X is governed by a decentralized spirit. Join our social channels to propose features, vote on tournament structures, and meet fellow players.
+               SOLPOKER X is governed by a decentralized spirit. Join our social channels to propose features, vote on new game types, and meet fellow players.
            </p>
            <div className="flex justify-center gap-4">
                <a href="https://t.me/solpokerx" target="_blank" className="flex items-center gap-2 bg-sol-blue/10 text-sol-blue px-6 py-3 rounded-lg font-bold hover:bg-sol-blue hover:text-white transition-all">

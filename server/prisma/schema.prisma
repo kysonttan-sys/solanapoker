@@ -143,5 +143,3 @@ model RakeDistribution {
   @@index([referrerUserId])
   @@index([createdAt])
 }
-
-// Tournament System - REMOVED (not ready for production)

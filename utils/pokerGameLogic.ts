@@ -29,25 +29,9 @@ export interface PlayerState {
   handResult?: HandResult; // The actual poker hand score
   winningHand?: CardData[]; // The specific 5 cards if they won
   totalHands?: number; // Added for VIP tracking
-  finishRank?: number; // For Tournaments: 1st, 2nd, 3rd...
-  finishWinnings?: number; // For Tournaments: Prize amount
 }
 
 export type GamePhase = 'pre-flop' | 'flop' | 'turn' | 'river' | 'showdown';
-
-// Professional Tournament Structure
-export const TOURNAMENT_STRUCTURE = [
-    { level: 1, sb: 50, bb: 100, ante: 0 },
-    { level: 2, sb: 75, bb: 150, ante: 0 },
-    { level: 3, sb: 100, bb: 200, ante: 25 },
-    { level: 4, sb: 150, bb: 300, ante: 50 },
-    { level: 5, sb: 200, bb: 400, ante: 50 },
-    { level: 6, sb: 300, bb: 600, ante: 100 },
-    { level: 7, sb: 400, bb: 800, ante: 100 },
-    { level: 8, sb: 600, bb: 1200, ante: 200 },
-    { level: 9, sb: 800, bb: 1600, ante: 200 },
-    { level: 10, sb: 1000, bb: 2000, ante: 300 },
-];
 
 export interface FairnessState {
     currentServerSeed: string; // The unhashed seed (Secret until hand over)
@@ -63,7 +47,7 @@ export interface FairnessState {
 
 export interface GameState {
   tableId: string;
-  gameMode: 'cash' | 'tournament' | 'fun';
+  gameMode: 'cash' | 'fun';
   maxSeats: 6 | 9;
   creatorId?: string | null; // Table creator's user ID for Host-to-Earn attribution
   players: PlayerState[];
@@ -87,15 +71,6 @@ export interface GameState {
   lastAggressorId?: string; // Track for showdown order
   handNumber: number; // Track total hands played
   rakeCap?: number; // Cap for cash games (Table Limit)
-  tournamentDetails?: {
-      level: number;
-      prizePool: number;
-      payouts: number[];
-      isFinished?: boolean;
-      winnerId?: string;
-      nextBlinds?: string; // e.g. "100/200"
-      handsPerLevel: number;
-  };
 }
 
 // --- LOGIC ---
@@ -112,8 +87,7 @@ export const BOT_NAMES = [
 ];
 
 // Helper to sanitize money
-const safeMoney = (amount: number, gameMode: 'cash' | 'tournament' | 'fun') => {
-    if (gameMode === 'tournament') return Math.floor(amount);
+const safeMoney = (amount: number, gameMode: 'cash' | 'fun') => {
     const fixed = Number(amount.toFixed(4));
     return Math.floor(fixed * 100) / 100;
 };
@@ -138,33 +112,13 @@ export class PokerEngine {
 
   // Initial State Factory
   static initializeGame(
-      tableId: string, 
-      maxSeats: 6 | 9, 
-      smallBlind: number, 
-      bigBlind: number, 
-      gameMode: 'cash' | 'tournament' | 'fun' = 'cash', 
-      prizePool: number = 0, 
+      tableId: string,
+      maxSeats: 6 | 9,
+      smallBlind: number,
+      bigBlind: number,
+      gameMode: 'cash' | 'fun' = 'cash',
       rakeCap: number = 5
     ): GameState {
-    
-    // Tournament Initialization Logic
-    let tournamentDetails = undefined;
-    if (gameMode === 'tournament') {
-        const p1 = prizePool * 0.5;
-        const p2 = prizePool * 0.3;
-        const p3 = prizePool * 0.2;
-        
-        tournamentDetails = {
-            level: 1,
-            prizePool: prizePool,
-            payouts: [p1, p2, p3],
-            isFinished: false,
-            handsPerLevel: 5,
-            nextBlinds: `${TOURNAMENT_STRUCTURE[1].sb}/${TOURNAMENT_STRUCTURE[1].bb}`
-        };
-        smallBlind = TOURNAMENT_STRUCTURE[0].sb;
-        bigBlind = TOURNAMENT_STRUCTURE[0].bb;
-    }
 
     return {
       tableId,
@@ -182,7 +136,6 @@ export class PokerEngine {
       deck: [],
       handNumber: 0,
       rakeCap,
-      tournamentDetails,
       fairness: {
           currentServerSeed: '',
           currentServerHash: '',
@@ -266,38 +219,14 @@ export class PokerEngine {
 
   // UPDATED: Now accepts a pre-shuffled deck and fairness data
   static dealHand(
-      state: GameState, 
-      provablyFairDeck: CardData[], 
+      state: GameState,
+      provablyFairDeck: CardData[],
       newFairnessState: FairnessState
     ): GameState {
-    
-    // Check if Tournament is Over
-    if (state.gameMode === 'tournament') {
-        const remainingPlayers = state.players.filter(p => p.status !== 'eliminated');
-        if (remainingPlayers.length === 1) {
-            const winner = remainingPlayers[0];
-            const firstPlacePrize = state.tournamentDetails!.payouts[0];
-            
-            const updatedPlayers = state.players.map(p => 
-                p.id === winner.id ? { ...p, finishRank: 1, finishWinnings: firstPlacePrize } : p
-            );
-
-            return {
-                ...state,
-                players: updatedPlayers,
-                tournamentDetails: {
-                    ...state.tournamentDetails!,
-                    isFinished: true,
-                    winnerId: winner.id
-                },
-                lastLog: `TOURNAMENT OVER! ${winner.name} finishes 1st for $${firstPlacePrize.toLocaleString()}!`
-            };
-        }
-    }
 
     const deck = provablyFairDeck;
     let handNumber = state.handNumber || 0;
-    
+
     // Archive Last Hand
     let lastHand = state.lastHand;
     if (state.phase === 'showdown' && state.winners && state.winners.length > 0) {
@@ -309,38 +238,9 @@ export class PokerEngine {
     }
 
     handNumber++;
-    
+
     let currentSb = state.smallBlind;
     let currentBb = state.bigBlind;
-    let currentAnte = 0;
-    let tournamentDetails = state.tournamentDetails;
-
-    if (state.gameMode === 'tournament' && tournamentDetails) {
-        if ((handNumber - 1) > 0 && (handNumber - 1) % tournamentDetails.handsPerLevel === 0) {
-            const nextLevelIdx = tournamentDetails.level; 
-            if (nextLevelIdx < TOURNAMENT_STRUCTURE.length) {
-                const structure = TOURNAMENT_STRUCTURE[nextLevelIdx];
-                currentSb = structure.sb;
-                currentBb = structure.bb;
-                currentAnte = structure.ante;
-                
-                const nextStruct = TOURNAMENT_STRUCTURE[nextLevelIdx + 1];
-                const nextBlindsStr = nextStruct ? `${nextStruct.sb}/${nextStruct.bb}` : 'MAX';
-
-                tournamentDetails = { 
-                    ...tournamentDetails, 
-                    level: tournamentDetails.level + 1,
-                    nextBlinds: nextBlindsStr
-                };
-            } else {
-                const structure = TOURNAMENT_STRUCTURE[TOURNAMENT_STRUCTURE.length - 1];
-                currentAnte = structure.ante;
-            }
-        } else {
-            const structure = TOURNAMENT_STRUCTURE[tournamentDetails.level - 1];
-            currentAnte = structure ? structure.ante : 0;
-        }
-    }
 
     // Reset players
     let pot = 0;
@@ -349,30 +249,17 @@ export class PokerEngine {
         let status = p.status;
         let bet = 0;
         let totalBet = 0;
-        
+
         if (state.gameMode === 'cash' && !p.id.startsWith('u') && status !== 'sitting-out' && balance < currentBb * 10) {
             balance += currentBb * 100;
         }
-        
-        if (state.gameMode === 'tournament') {
-            if (balance <= 0 && status !== 'eliminated') {
-                status = 'eliminated';
-            }
-        }
-        
-        if (status !== 'sitting-out' && status !== 'eliminated') {
-            status = balance > 0 ? 'active' : 'sitting-out'; 
-        }
 
-        if (status === 'active' && currentAnte > 0) {
-            const anteAmt = Math.min(balance, currentAnte);
-            balance = safeMoney(balance - anteAmt, state.gameMode);
-            pot += anteAmt;
-            if (balance === 0) status = 'all-in';
+        if (status !== 'sitting-out' && status !== 'eliminated') {
+            status = balance > 0 ? 'active' : 'sitting-out';
         }
 
         const cards = (status === 'sitting-out' || status === 'eliminated') ? [] : [{...deck.pop()!, hidden: true}, {...deck.pop()!, hidden: true}];
-        
+
         const preFlopStrength = cards.length === 2 ? getPreFlopStrength(cards[0], cards[1]) : 0;
 
         return {
@@ -394,7 +281,7 @@ export class PokerEngine {
 
     const activePlayers = players.filter(p => p.status !== 'sitting-out' && p.status !== 'eliminated');
     if (activePlayers.length < 2) {
-        return state; 
+        return state;
     }
 
     let nextDealerIndex = (state.dealerIndex + 1) % players.length;
@@ -406,7 +293,7 @@ export class PokerEngine {
     // Post Blinds
     let sbIndex = (nextDealerIndex + 1) % players.length;
     while(players[sbIndex].status === 'sitting-out' || players[sbIndex].status === 'eliminated') sbIndex = (sbIndex + 1) % players.length;
-    
+
     let bbIndex = (sbIndex + 1) % players.length;
     while(players[bbIndex].status === 'sitting-out' || players[bbIndex].status === 'eliminated') bbIndex = (bbIndex + 1) % players.length;
 
@@ -429,9 +316,7 @@ export class PokerEngine {
 
     players[utgIndex].isTurn = true;
 
-    const msg = state.gameMode === 'tournament' 
-            ? `Level ${tournamentDetails?.level}: Blinds ${currentSb}/${currentBb}${currentAnte > 0 ? ` Ante ${currentAnte}` : ''}.` 
-            : `Hand #${handNumber} started. Blinds ${currentSb}/${currentBb}.`;
+    const msg = `Hand #${handNumber} started. Blinds ${currentSb}/${currentBb}.`;
 
     return {
         ...state,
@@ -450,7 +335,6 @@ export class PokerEngine {
         lastLog: msg,
         lastAggressorId: undefined,
         handNumber,
-        tournamentDetails,
         fairness: newFairnessState // Update with Provably Fair data
     };
   }
@@ -467,18 +351,13 @@ export class PokerEngine {
       
       effectiveStrength += (Math.random() * 10) - 5;
 
-      let modifier = 0;
-      if (state.gameMode === 'tournament' && player.balance < state.bigBlind * 10) {
-          modifier = 20; 
-      }
-
       const activePlayers = state.players.filter(p => p.status === 'active' || p.status === 'all-in');
       const positionIndex = activePlayers.findIndex(p => p.id === playerId);
       const relativePos = positionIndex / activePlayers.length; 
 
       // Tightened ranges for more realistic play
-      const foldThreshold = (40 - (relativePos * 5)) - modifier; 
-      const raiseThreshold = (70 - (relativePos * 10)) - modifier; 
+      const foldThreshold = (40 - (relativePos * 5));
+      const raiseThreshold = (70 - (relativePos * 10)); 
 
       const rng = Math.random();
 
@@ -893,26 +772,12 @@ export class PokerEngine {
           }
 
           let newStatus = p.status;
-          let finishRank = p.finishRank;
-          let finishWinnings = p.finishWinnings;
 
           if (p.status === 'all-in' && newBal > 0) {
               newStatus = 'active';
-          } 
-          else if (state.gameMode === 'tournament' && newBal === 0 && (p.status === 'active' || p.status === 'all-in')) {
-              newStatus = 'eliminated';
-              const survivorsAfter = survivorsBefore - 1; 
-              finishRank = survivorsAfter + 1; 
-
-              if (state.tournamentDetails?.payouts) {
-                   const payout = state.tournamentDetails.payouts[finishRank - 1];
-                   if (payout) {
-                       finishWinnings = payout;
-                   }
-              }
           }
 
-          return { ...p, balance: newBal, isTurn: false, bet: 0, totalBet: 0, status: newStatus, finishRank, finishWinnings, winningHand };
+          return { ...p, balance: newBal, isTurn: false, bet: 0, totalBet: 0, status: newStatus, winningHand };
       });
 
       const winnersArray = Array.from(winnersMap.entries()).map(([id, data]) => ({

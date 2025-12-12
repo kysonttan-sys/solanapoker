@@ -113,22 +113,13 @@ export const Lobby: React.FC<LobbyProps> = ({ onCreateGame, onJoinGame, tables }
                     <Button variant="ghost" className="mt-2 text-sol-green" onClick={() => onCreateGame(GameType.CASH)}>Create one?</Button>
                 </div>
              )
-          ) : activeTab === 'fun' ? (
+          ) : (
              filteredFunTables.length > 0 ? (
                 filteredFunTables.map(table => <TableCard key={table.id} table={table} onJoin={onJoinGame} />)
              ) : (
                 <div className="col-span-full text-center py-12 text-gray-500 bg-white/5 rounded-xl border border-white/5 border-dashed">
                     <p>No fun tables found. Start a friendly match!</p>
                     <Button variant="ghost" className="mt-2 text-yellow-500" onClick={() => onCreateGame(GameType.FUN)}>Create Fun Table</Button>
-                </div>
-             )
-          ) : (
-             filteredTournaments.length > 0 ? (
-                filteredTournaments.map(tour => <TournamentCard key={tour.id} tournament={tour} onJoin={onJoinGame} />)
-             ) : (
-                <div className="col-span-full text-center py-12 text-gray-500 bg-white/5 rounded-xl border border-white/5 border-dashed">
-                    <p>No tournaments found matching your filters.</p>
-                    <Button variant="ghost" className="mt-2 text-sol-purple" onClick={() => onCreateGame(GameType.TOURNAMENT)}>Create one?</Button>
                 </div>
              )
           )}

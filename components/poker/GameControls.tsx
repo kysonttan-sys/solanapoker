@@ -12,7 +12,7 @@ interface GameControlsProps {
   pot: number;
   showRebuy?: boolean;
   showBB?: boolean;
-  gameType?: 'cash' | 'tournament' | 'fun';
+  gameType?: 'cash' | 'fun';
 }
 
 export const GameControls: React.FC<GameControlsProps> = ({ 
@@ -53,7 +53,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
           return '$' + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       }
       
-      // Tournament / Fun style
+      // Fun game style (no dollar sign)
       return n >= 1000000 ? (n/1000000).toFixed(1) + 'M' : n >= 1000 ? (n/1000).toFixed(1) + 'k' : Math.floor(n).toLocaleString();
   };
   
@@ -100,9 +100,9 @@ export const GameControls: React.FC<GameControlsProps> = ({
           }
       }
 
-      // Ensure we stick to decimals for cash, integers for tournaments when calculating slider steps
+      // Ensure we stick to decimals for cash, integers for fun games
       let validAmount = Math.max(minRaise, Math.min(amount, userBalance));
-      
+
       if (gameType === 'cash') {
           validAmount = Math.floor(validAmount * 100) / 100;
       } else {
