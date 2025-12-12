@@ -706,36 +706,27 @@ export class PokerEngine {
       return Math.min(calculatedRake, rakeCap);
   }
 
-  static distributeRake(rake: number, hostTier: number = 0, referrerRank: number = 0): {
-      host: number;
+  static distributeRake(rake: number, totalReferralAmount: number = 0): {
       referrer: number;
       jackpot: number;
       globalPool: number;
       developer: number;
   } {
       if (rake <= 0) {
-          return { host: 0, referrer: 0, jackpot: 0, globalPool: 0, developer: 0 };
+          return { referrer: 0, jackpot: 0, globalPool: 0, developer: 0 };
       }
 
-      // Host share: 30-40% based on tier
-      const hostShares = [30, 32.5, 35, 37.5, 40]; // Dealer to Casino Mogul
-      const hostPercent = hostShares[hostTier] || 30;
-      const hostShare = (rake * hostPercent) / 100;
-
-      // Referrer share: 5-20% based on rank
-      const referrerShares = [5, 10, 15, 20]; // Scout to Partner
-      const referrerPercent = referrerShares[referrerRank] || 5;
-      const referrerShare = (rake * referrerPercent) / 100;
+      // Referrer share: calculated from chain (0-60% max based on Hybrid Override Model)
+      const referrerShare = totalReferralAmount;
 
       // Protocol allocations (% of total rake)
       const jackpotShare = (rake * 5) / 100;      // 5% to Jackpot
       const globalPoolShare = (rake * 5) / 100;   // 5% to Global Pool
 
-      // Developer gets remainder after host, referrer, jackpot, and global pool
-      const developerShare = rake - (hostShare + referrerShare + jackpotShare + globalPoolShare);
+      // Developer gets remainder after referral overrides, jackpot, and global pool
+      const developerShare = rake - (referrerShare + jackpotShare + globalPoolShare);
 
       return {
-          host: Number(hostShare.toFixed(4)),
           referrer: Number(referrerShare.toFixed(4)),
           jackpot: Number(jackpotShare.toFixed(4)),
           globalPool: Number(globalPoolShare.toFixed(4)),

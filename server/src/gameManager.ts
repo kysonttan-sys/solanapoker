@@ -355,11 +355,111 @@ export class GameManager {
         }
     }
 
+    // Hybrid Override Model: Calculate referral commissions for entire chain
+    private async calculateReferralOverrides(
+        playerId: string,
+        rake: number
+    ): Promise<{
+        overrides: Array<{
+            userId: string;
+            level: number;
+            rank: string;
+            rankPercent: number;
+            amount: number;
+        }>;
+        totalReferralAmount: number;
+    }> {
+        const overrides: Array<{
+            userId: string;
+            level: number;
+            rank: string;
+            rankPercent: number;
+            amount: number;
+        }> = [];
+
+        // Rank percentages from RAKE_DISTRIBUTION_GUIDE.md
+        const RANK_PERCENTS: Record<string, number> = {
+            'FREE': 0,
+            'AGENT': 20,
+            'BROKER': 35,
+            'PARTNER': 50,
+            'MASTER': 60
+        };
+
+        let currentUserId = playerId;
+        let level = 0;
+        let highestPaid = 0;
+        let totalReferralAmount = 0;
+        const visited = new Set<string>(); // Cycle detection
+
+        // Walk up referral chain (max 100 levels)
+        while (level < 100) {
+            try {
+                // Get current user's referrer
+                const user = await db.user.findUnique({
+                    where: { id: currentUserId },
+                    select: { referredBy: true }
+                });
+
+                if (!user || !user.referredBy) break; // No more uplines
+
+                // Find the referrer user
+                const referrer = await db.user.findUnique({
+                    where: { referralCode: user.referredBy },
+                    select: { id: true, referralRank: true }
+                });
+
+                if (!referrer) break; // Referrer not found
+
+                // Cycle detection
+                if (visited.has(referrer.id)) {
+                    console.warn(`[ReferralOverride] Cycle detected at ${referrer.id}`);
+                    break;
+                }
+                visited.add(referrer.id);
+
+                level++;
+                const referrerRank = referrer.referralRank || 'FREE';
+                const referrerPercent = RANK_PERCENTS[referrerRank] || 0;
+
+                let payPercent = 0;
+                if (level === 1) {
+                    // Direct upline (Level 1) gets FULL rank %
+                    payPercent = referrerPercent;
+                } else {
+                    // Indirect uplines (Level 2+) get override difference
+                    payPercent = Math.max(0, referrerPercent - highestPaid);
+                }
+
+                const payAmount = Number(((payPercent / 100) * rake).toFixed(4));
+
+                overrides.push({
+                    userId: referrer.id,
+                    level,
+                    rank: referrerRank,
+                    rankPercent: referrerPercent,
+                    amount: payAmount
+                });
+
+                totalReferralAmount += payAmount;
+                highestPaid = Math.max(highestPaid, referrerPercent);
+
+                // Move up the chain
+                currentUserId = referrer.id;
+            } catch (e) {
+                console.error(`[ReferralOverride] Error at level ${level}:`, e);
+                break;
+            }
+        }
+
+        return { overrides, totalReferralAmount };
+    }
+
     private async handleWinners(tableId: string, table: any, newState: any) {
         // Calculate and distribute rake
         let totalRake = 0;
-        let rakeDistribution: { host: number; referrer: number; jackpot: number; globalPool: number; developer: number } | null = null;
-        
+        let rakeDistribution: { referrer: number; jackpot: number; globalPool: number; developer: number } | null = null;
+
         if (table.gameMode === 'cash' && newState.pot > 0) {
             // Get winner's VIP level for rake calculation
             const mainWinner = newState.winners[0];
@@ -400,108 +500,97 @@ export class GameManager {
             
             totalRake = PokerEngine.calculateRake(newState.pot, table, vipLevel);
 
-            // Get host info from table creator
-            let hostTier = 0;
-            let hostUserId: string | null = null;
-            if (table.creatorId) {
-                try {
-                    const host = await db.user.findUnique({
-                        where: { id: table.creatorId },
-                        select: { hostRank: true }
-                    });
-                    if (host) {
-                        hostTier = host.hostRank || 0;
-                        hostUserId = table.creatorId;
-                    }
-                } catch (e) {
-                    console.error('[Rake] Error fetching host info:', e);
-                }
-            }
+            // Calculate referral overrides using Hybrid Override Model
+            let referralOverrides: Array<{
+                userId: string;
+                level: number;
+                rank: string;
+                rankPercent: number;
+                amount: number;
+            }> = [];
+            let totalReferralAmount = 0;
 
-            // Get referrer info from winner's referredBy field
-            let referrerRank = 0;
-            let referrerUserId: string | null = null;
             if (mainWinner && !mainWinner.playerId.startsWith('bot_')) {
                 try {
-                    const winner = await db.user.findUnique({
-                        where: { id: mainWinner.playerId },
-                        select: { referredBy: true }
-                    });
+                    const result = await this.calculateReferralOverrides(mainWinner.playerId, totalRake);
+                    referralOverrides = result.overrides;
+                    totalReferralAmount = result.totalReferralAmount;
+                } catch (e) {
+                    console.error('[Rake] Error calculating referral overrides:', e);
+                }
+            }
 
-                    if (winner?.referredBy) {
-                        // Find the user who has this referral code
-                        const referrer = await db.user.findUnique({
-                            where: { referralCode: winner.referredBy },
-                            select: { id: true, referralRank: true }
+            rakeDistribution = PokerEngine.distributeRake(totalRake, totalReferralAmount);
+
+            // Credit each referrer in the chain and create transactions
+            for (const override of referralOverrides) {
+                if (override.amount > 0) {
+                    try {
+                        // Credit balance and increment teamRakeWindow
+                        await db.user.update({
+                            where: { id: override.userId },
+                            data: {
+                                balance: { increment: override.amount },
+                                teamRakeWindow: { increment: totalRake },
+                                teamRakeAllTime: { increment: totalRake }
+                            }
                         });
 
-                        if (referrer) {
-                            referrerRank = referrer.referralRank || 0;
-                            referrerUserId = referrer.id;
-                        }
+                        // Create transaction record with metadata
+                        await db.transaction.create({
+                            data: {
+                                userId: override.userId,
+                                type: 'RAKE_REFERRER_OVERRIDE',
+                                amount: override.amount,
+                                status: 'COMPLETED',
+                                metadata: {
+                                    level: override.level,
+                                    recipientRank: override.rank,
+                                    sourceHandId: table.handNumber?.toString() || '0',
+                                    overridePercent: override.rankPercent,
+                                    teamRakeContribution: totalRake
+                                }
+                            }
+                        });
+
+                        console.log(`[Rake] Level ${override.level} - Credited $${override.amount.toFixed(4)} to ${override.rank} ${override.userId}`);
+                    } catch (e) {
+                        console.error(`[Rake] Error crediting referrer ${override.userId}:`, e);
                     }
-                } catch (e) {
-                    console.error('[Rake] Error fetching referrer info:', e);
-                }
-            }
-
-            rakeDistribution = PokerEngine.distributeRake(totalRake, hostTier, referrerRank);
-
-            // Credit referrer share to referrer's balance
-            if (referrerUserId && rakeDistribution.referrer > 0) {
-                try {
-                    await db.user.update({
-                        where: { id: referrerUserId },
-                        data: { balance: { increment: rakeDistribution.referrer } }
-                    });
-                    console.log(`[Rake] Credited $${rakeDistribution.referrer.toFixed(2)} to referrer ${referrerUserId}`);
-                } catch (e) {
-                    console.error('[Rake] Error crediting referrer:', e);
-                }
-            }
-
-            // Credit host share to host's balance
-            if (hostUserId && rakeDistribution.host > 0) {
-                try {
-                    await db.user.update({
-                        where: { id: hostUserId },
-                        data: {
-                            balance: { increment: rakeDistribution.host },
-                            hostEarnings: { increment: rakeDistribution.host }
-                        }
-                    });
-                    console.log(`[Rake] Credited $${rakeDistribution.host.toFixed(2)} to host ${hostUserId}`);
-                } catch (e) {
-                    console.error('[Rake] Error crediting host:', e);
                 }
             }
 
             // Save rake distribution to database
             try {
+                // Prepare referral breakdown for metadata
+                const referralBreakdown = referralOverrides.map(override => ({
+                    level: override.level,
+                    userId: override.userId,
+                    rank: override.rank,
+                    percent: override.rankPercent,
+                    amount: override.amount
+                }));
+
                 // @ts-ignore - rakeDistribution model may not be in Prisma types yet
                 await db.rakeDistribution.create({
                     data: {
                         handId: table.handNumber?.toString() || '0',
                         totalRake,
-                        hostShare: rakeDistribution.host,
-                        hostUserId,
-                        hostTier,
                         referrerShare: rakeDistribution.referrer,
-                        referrerUserId,
-                        referrerRank,
+                        referralBreakdown: referralBreakdown,
                         jackpotShare: rakeDistribution.jackpot,
                         globalPoolShare: rakeDistribution.globalPool,
                         developerShare: rakeDistribution.developer
                     }
                 });
 
-                // Add to Global Partner Pool (auto-distributes to Rank 3 Partners)
+                // Add to Global Pool (distributed weekly to Masters)
                 await distributionManager.addToGlobalPool(rakeDistribution.globalPool);
 
                 // Add to Monthly Jackpot (distributes on 1st of every month)
                 await distributionManager.addToJackpot(rakeDistribution.jackpot);
-                
-                console.log(`[Rake] Distributed $${totalRake.toFixed(2)} - Host: $${rakeDistribution.host.toFixed(2)}, Jackpot: $${rakeDistribution.jackpot.toFixed(2)}, Global Pool: $${rakeDistribution.globalPool.toFixed(2)}, Dev: $${rakeDistribution.developer.toFixed(2)}`);
+
+                console.log(`[Rake] Distributed $${totalRake.toFixed(2)} - Referrals: $${rakeDistribution.referrer.toFixed(2)} (${referralOverrides.length} levels), Jackpot: $${rakeDistribution.jackpot.toFixed(2)}, Global Pool: $${rakeDistribution.globalPool.toFixed(2)}, Dev: $${rakeDistribution.developer.toFixed(2)}`);
             } catch (e) {
                 console.error('[Rake] Error saving distribution:', e);
             }

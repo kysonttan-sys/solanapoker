@@ -38,9 +38,15 @@ model User {
   isVerified      Boolean       @default(false)
   referralCode    String?       @unique
   referredBy      String?       // Who referred this user (referral code)
-  referralRank    Int           @default(0) // 0=Scout, 1=Agent, 2=Broker, 3=Partner
-  hostRank        Int           @default(0) // 0=Dealer to 4=Mogul
-  hostEarnings    Float         @default(0) // Lifetime host revenue earnings
+  referralRank    String        @default("FREE") // FREE, AGENT, BROKER, PARTNER, MASTER
+
+  // Referral earnings tracking (Hybrid Override Model)
+  teamRakeWindow  Float         @default(0) // Windowed counter for Global Pool (reset weekly)
+  teamRakeAllTime Float         @default(0) // Lifetime team rake (never reset)
+
+  // Legacy fields (deprecated but kept for backwards compatibility)
+  hostRank        Int           @default(0) // DEPRECATED: No longer used
+  hostEarnings    Float         @default(0) // DEPRECATED: No longer used
   
   // Blockchain Sync Fields
   onChainBalance  Float         @default(0)     // On-chain SOL/token balance
@@ -77,7 +83,10 @@ model Transaction {
   // Game Context
   handId        String?                    // Link to Hand record if game-related
   hand          Hand?    @relation(fields: [handId], references: [id])
-  
+
+  // Additional metadata (JSON field for flexible data storage)
+  metadata      Json?    // Stores context: { level, recipientRank, sourceHandId, overridePercent, teamRakeContribution }
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   
@@ -122,24 +131,18 @@ model Hand {
   @@index([createdAt])
 }
 
-// Rake Distribution Tracking
+// Rake Distribution Tracking (Hybrid Override Model)
 model RakeDistribution {
-  id              String   @id @default(cuid())
-  handId          String
-  totalRake       Float
-  hostShare       Float
-  hostUserId      String?
-  hostTier        Int      @default(0)
-  referrerShare   Float
-  referrerUserId  String?
-  referrerRank    Int      @default(0)
-  jackpotShare    Float
-  globalPoolShare Float
-  developerShare  Float
-  createdAt       DateTime @default(now())
+  id                String   @id @default(cuid())
+  handId            String
+  totalRake         Float
+  referrerShare     Float    // Total override payments (sum of all levels)
+  referralBreakdown Json?    // Detailed per-level breakdown: [{ level, userId, rank, percent, amount }, ...]
+  jackpotShare      Float
+  globalPoolShare   Float
+  developerShare    Float
+  createdAt         DateTime @default(now())
 
   @@index([handId])
-  @@index([hostUserId])
-  @@index([referrerUserId])
   @@index([createdAt])
 }
