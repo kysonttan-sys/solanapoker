@@ -11,7 +11,7 @@ import { Modal } from '../components/ui/Modal';
 import { WalletSettings } from '../components/WalletSettings';
 import { ReferralDashboard } from '../components/ReferralDashboard';
 import { getApiUrl } from '../utils/api';
-import { MOCK_USER, MOCK_STATS, LEADERBOARD_DATA, getVipStatus, REFERRAL_TIERS, getHostStatus, ADMIN_WALLET_ADDRESS } from '../constants';
+import { MOCK_STATS, LEADERBOARD_DATA, getVipStatus, ADMIN_WALLET_ADDRESS } from '../constants';
 import { User } from '../types';
 import { Camera, Mail, AtSign, Wallet, Save, X, Image as ImageIcon, Lock, Trophy, TrendingUp, TrendingDown, Eye, Copy, Check, Users, Gift, Coins, Share2, DollarSign, PieChart as PieChartIcon, Crown, Network, Activity, Target, Clock, Settings, FileText, QrCode, Volume2, VolumeX, Palette, ArrowUpCircle, ArrowDownCircle, Ghost, EyeOff, Shield, UserPlus, MessageSquare, Trash2, Circle, Search, Send, ExternalLink, AlertTriangle, Loader2, Database, Terminal } from 'lucide-react';
 import { useConnection, useWallet } from '../components/WalletContextProvider';
@@ -120,7 +120,7 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
   const [isEditing, setIsEditing] = useState(false);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'friends' | 'vip' | 'ecosystem' | 'history' | 'settings' | 'admin'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'vip' | 'ecosystem' | 'history' | 'settings' | 'admin'>('overview');
   const [timeRange, setTimeRange] = useState('1W');
   const [isQrOpen, setIsQrOpen] = useState(false);
   
@@ -164,7 +164,10 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tabParam = params.get('tab');
-    if (tabParam && ['overview', 'friends', 'vip', 'ecosystem', 'history', 'settings'].includes(tabParam)) {
+    // Support 'affiliate' as alias for 'ecosystem', and redirect 'friends' to 'ecosystem'
+    if (tabParam === 'affiliate' || tabParam === 'friends') {
+        setActiveTab('ecosystem');
+    } else if (tabParam && ['overview', 'vip', 'ecosystem', 'history', 'settings'].includes(tabParam)) {
         setActiveTab(tabParam as any);
     }
   }, [location]);
@@ -552,11 +555,6 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
 
   // Calculate derived values before early return
   const vipStatus = profileForm ? getVipStatus(stats.totalHands) : null;
-  const currentReferralTier = profileForm ? REFERRAL_TIERS[profileForm.referralRank || 0] : null;
-  const nextReferralTier = profileForm && profileForm.referralRank !== undefined && profileForm.referralRank < 3 ? REFERRAL_TIERS[profileForm.referralRank + 1] : null;
-
-  // Host Rank Logic
-  const currentHostStatus = profileForm ? getHostStatus(profileForm.ecosystemStats?.totalHostRevenueGenerated || 0) : null;
 
   // Early return AFTER calculating all values
   if (!profileForm || !vipStatus) {
@@ -569,16 +567,6 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
       </div>
     );
   }
-
-  // Derive Friends List
-  const friendsList = profileForm.friends?.map(fid => {
-      const f = LEADERBOARD_DATA.find(l => l.id === fid);
-      return f ? {
-          ...f,
-          isOnline: Math.random() > 0.5,
-          avatar: `https://ui-avatars.com/api/?name=${f.player}&background=random`
-      } : null;
-  }).filter(Boolean) || [];
 
   return (
     <div className="max-w-6xl mx-auto animate-in fade-in duration-500 relative pt-10 md:pt-0 pb-12">
@@ -822,35 +810,29 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
           {/* TABS Navigation */}
           {isOwnProfile && (
               <div className="flex border-b border-white/10 mb-6 overflow-x-auto">
-                  <button 
+                  <button
                     onClick={() => setActiveTab('overview')}
                     className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'overview' ? 'border-sol-green text-white' : 'border-transparent text-gray-400 hover:text-white'}`}
                   >
                       Overview
                   </button>
                   <button
-                    onClick={() => setActiveTab('friends')}
-                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'friends' ? 'border-sol-green text-white' : 'border-transparent text-gray-400 hover:text-white'}`}
-                  >
-                      <Users size={16} /> Referrals
-                  </button>
-                  <button 
                     onClick={() => setActiveTab('history')}
                     className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'history' ? 'border-sol-blue text-white' : 'border-transparent text-gray-400 hover:text-white'}`}
                   >
                       <FileText size={16} /> History
                   </button>
-                  <button 
+                  <button
                     onClick={() => setActiveTab('vip')}
                     className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'vip' ? 'border-yellow-400 text-white' : 'border-transparent text-gray-400 hover:text-white'}`}
                   >
                       <Crown size={16} className={activeTab === 'vip' ? 'text-yellow-400' : ''} /> VIP Club
                   </button>
-                  <button 
+                  <button
                     onClick={() => setActiveTab('ecosystem')}
                     className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'ecosystem' ? 'border-sol-purple text-white' : 'border-transparent text-gray-400 hover:text-white'}`}
                   >
-                      <Network size={16} /> Ecosystem
+                      <Network size={16} /> Affiliate
                   </button>
                   <button 
                     onClick={() => setActiveTab('settings')}
@@ -1007,13 +989,6 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
               </div>
           )}
 
-          {activeTab === 'friends' && profileForm && (
-              // REFERRAL DASHBOARD TAB
-              <div className="animate-in slide-in-from-right-4">
-                  <ReferralDashboard userId={profileForm.id} />
-              </div>
-          )}
-
           {activeTab === 'history' && (
               // NEW HISTORY TAB
               <div className="space-y-6 animate-in slide-in-from-right-4">
@@ -1165,15 +1140,16 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
               </div>
           )}
 
-          {activeTab === 'ecosystem' && (
-              // ECOSYSTEM TAB CONTENT
+          {activeTab === 'ecosystem' && profileForm && (
+              // AFFILIATE TAB CONTENT - Combined Ecosystem + Referrals
               <div className="space-y-6 animate-in slide-in-from-right-4">
+                  {/* Pending Rewards - Always at top */}
                   <div className="bg-gradient-to-br from-sol-purple/20 to-sol-blue/20 border border-sol-purple/30 rounded-xl p-6 relative overflow-hidden">
                       <div className="absolute top-0 right-0 p-32 bg-sol-purple/10 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2"></div>
                       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 relative z-10">
                           <div>
                               <h3 className="text-gray-400 font-medium mb-1 flex items-center gap-2"><Gift size={16} className="text-sol-green"/> Pending Rewards</h3>
-                              <div className="text-4xl font-bold text-white mb-2">${profileForm.ecosystemStats?.pendingRewards.toLocaleString()}</div>
+                              <div className="text-4xl font-bold text-white mb-2">${profileForm.ecosystemStats?.pendingRewards?.toLocaleString() || '0'}</div>
                               <p className="text-sm text-gray-400">Total earned from Hosting & Referrals</p>
                           </div>
                           <Button onClick={handleClaimRewards} className="shadow-[0_0_20px_rgba(138,66,255,0.4)]">
@@ -1181,63 +1157,9 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
                           </Button>
                       </div>
                   </div>
-                  <Card className="bg-white/5 border-white/10">
-                      <div className="flex justify-between items-start mb-6">
-                           <div>
-                              <div className="flex items-center gap-3 mb-1">
-                                  <div className="p-2 bg-sol-green/10 rounded-lg text-sol-green">
-                                      <Network size={20} />
-                                  </div>
-                                  <h3 className="font-bold text-lg text-white">My Referral Network</h3>
-                              </div>
-                              <p className="text-sm text-gray-400">Share your link. Earn differential commissions from 3 levels deep.</p>
-                           </div>
-                           <div className="text-right">
-                                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Current Rank</div>
-                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border ${currentReferralTier.color.replace('text', 'border')}/30 bg-black/40`}>
-                                     <span className={`font-bold ${currentReferralTier.color}`}>{currentReferralTier.name}</span>
-                                     <span className="bg-white/10 px-1.5 rounded text-xs text-white">{currentReferralTier.commission}%</span>
-                                </div>
-                           </div>
-                      </div>
-                      <div className="bg-black/40 rounded-xl p-5 border border-white/5 mb-6">
-                           <div className="flex justify-between items-end mb-3">
-                               <div>
-                                    <h4 className="text-white font-bold text-sm">Progression to {nextReferralTier ? nextReferralTier.name : 'Max Rank'}</h4>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        {nextReferralTier ? nextReferralTier.req : 'You have reached the highest tier!'}
-                                    </p>
-                               </div>
-                               {nextReferralTier && (
-                                   <div className="text-right">
-                                        <span className="text-xs text-sol-green font-bold">Reward: {nextReferralTier.commission}% Commission</span>
-                                   </div>
-                               )}
-                           </div>
-                           {nextReferralTier && (
-                               <div className="space-y-3">
-                                   <div className="space-y-1">
-                                       <div className="flex justify-between text-[10px] text-gray-400 uppercase">
-                                           <span>Direct Referrals</span>
-                                           <span>{profileForm.ecosystemStats?.directReferrals} / 3</span>
-                                       </div>
-                                       <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                                           <div className="h-full bg-sol-green" style={{width: `${Math.min(100, ((profileForm.ecosystemStats?.directReferrals || 0) / 3) * 100)}%`}}></div>
-                                       </div>
-                                   </div>
-                               </div>
-                           )}
-                      </div>
-                      <div className="mt-6 flex items-center justify-between bg-black/40 p-4 rounded-xl border border-white/10">
-                          <div>
-                              <p className="text-xs text-gray-500 mb-1">YOUR REFERRAL LINK</p>
-                              <p className="text-sol-green font-mono font-bold tracking-wider text-sm md:text-base">{profileForm.referralCode}</p>
-                          </div>
-                          <button onClick={handleCopyReferral} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors">
-                              <Share2 size={20} />
-                          </button>
-                      </div>
-                  </Card>
+
+                  {/* Full Referral Dashboard */}
+                  <ReferralDashboard userId={profileForm.id} />
               </div>
           )}
 
