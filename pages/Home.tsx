@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Filter, Plus, Award, ArrowRight, Coins, Users, Layers, Activity, Globe, Zap, CheckCircle, Gift, Crown, Timer, Sparkles } from 'lucide-react';
+import { Play, Filter, Plus, Award, ArrowRight, Coins, Users, Layers, Activity, Globe, Zap, CheckCircle, Gift, Crown, Timer, Sparkles, TrendingUp, Flame, Star } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { GameType, PokerTable } from '../types';
 import { TableCard } from '../components/GameCards';
@@ -23,6 +23,15 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables }) 
   
   // Jackpot pool balance from database
   const [jackpotBalance, setJackpotBalance] = useState(0);
+
+  // Mock live activity feed (in production, this would come from WebSocket)
+  const [liveActivity, setLiveActivity] = useState([
+    { id: 1, type: 'win', user: 'Alice', amount: 1247, table: 3, icon: '💰' },
+    { id: 2, type: 'achievement', user: 'Bob', text: 'hit a Royal Flush', amount: 892, icon: '🎰' },
+    { id: 3, type: 'challenge', user: 'Charlie', text: 'completed Daily Challenge', amount: 50, icon: '🎉' },
+    { id: 4, type: 'rank', user: 'Dave', text: 'reached MASTER rank', amount: 0, icon: '⚡' },
+    { id: 5, type: 'win', user: 'Eve', amount: 543, table: 7, icon: '🔥' },
+  ]);
   
   useEffect(() => {
     const calculateCountdown = () => {
@@ -100,12 +109,28 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables }) 
             
             {/* Left Content */}
             <div className="max-w-2xl text-center lg:text-left">
-              <h1 className="text-4xl md:text-5xl font-bold mb-4 font-sans tracking-tight">
-                Fair. Transparent. <br/>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-sol-green to-sol-blue">Decentralized Poker.</span>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sol-green/10 border border-sol-green/20 text-sol-green text-sm font-bold mb-4">
+                <span className="animate-pulse">🔴</span> LIVE NOW
+              </div>
+              <h1 className="text-4xl md:text-6xl font-bold mb-4 font-sans tracking-tight">
+                Play Poker. <br/>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-sol-green via-yellow-500 to-sol-blue animate-gradient">
+                  Earn Crypto. ♠️♥️♦️♣️
+                </span>
               </h1>
-              <p className="text-gray-400 text-lg mb-8 max-w-lg mx-auto lg:mx-0">
-                Join the future of online poker on Solana. Instant payouts, verifiable RNG, and lowest fees in the galaxy.
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-6 text-sm">
+                <span className="flex items-center gap-1 text-sol-green">
+                  <CheckCircle size={16} /> <strong>Provably Fair</strong>
+                </span>
+                <span className="flex items-center gap-1 text-sol-blue">
+                  <Zap size={16} /> <strong>&lt; 2s Payouts</strong>
+                </span>
+                <span className="flex items-center gap-1 text-yellow-500">
+                  <Crown size={16} /> <strong>Earn 60%</strong>
+                </span>
+              </div>
+              <p className="text-gray-400 text-base mb-8 max-w-lg mx-auto lg:mx-0">
+                🚀 The first <strong className="text-white">non-custodial</strong> poker on Solana. Your keys, your coins, your game.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Button size="lg" onClick={() => navigate('/lobby')}>
@@ -121,7 +146,20 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables }) 
             <div className="w-full lg:w-auto bg-black/20 p-6 rounded-2xl border border-white/5 backdrop-blur-sm">
                 <div className="flex items-center gap-2 mb-4 justify-center lg:justify-start">
                     <Activity size={16} className="text-sol-green animate-pulse" />
-                    <span className="text-xs font-bold text-sol-green uppercase tracking-widest">Live Protocol Stats</span>
+                    <span className="text-xs font-bold text-sol-green uppercase tracking-widest">📊 Live Stats</span>
+                </div>
+                {/* Live Player Count - BIG */}
+                <div className="bg-gradient-to-br from-sol-green/20 to-transparent border border-sol-green/30 rounded-xl p-4 mb-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <div className="text-xs text-gray-400 mb-1">👥 Players Online</div>
+                            <div className="text-3xl font-black text-white font-mono flex items-center gap-2">
+                                <span className="text-sol-green animate-pulse">●</span>
+                                {platformStats[2]?.value || '0'}
+                            </div>
+                        </div>
+                        <Users size={32} className="text-sol-green/30" />
+                    </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     {platformStats.map((stat, idx) => (
@@ -151,16 +189,16 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables }) 
           <div className="flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
               <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                      <span className="bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                          <Sparkles size={10} /> JACKPOT POOL
+                      <span className="bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 animate-pulse">
+                          ⭐ JACKPOT POOL
                       </span>
-                      <span className="text-yellow-500 text-xs font-mono">5% OF ALL FEES</span>
+                      <span className="text-yellow-500 text-xs font-mono">💰 5% OF ALL FEES</span>
                   </div>
-                  <h2 className="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 mb-2 font-mono tracking-tight">
-                      ${jackpotBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                  <h2 className="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 mb-2 font-mono tracking-tight animate-pulse">
+                      💎 ${jackpotBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
                   </h2>
                   <p className="text-gray-400 max-w-md text-sm">
-                      Every hand played contributes to the Monthly Jackpot. Automatically distributed via smart contract to:
+                      🎰 Every hand played contributes! Automatically distributed on the <strong className="text-white">1st of each month</strong> to:
                   </p>
               </div>
 
@@ -194,41 +232,101 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables }) 
           </div>
       </div>
 
+      {/* Live Activity Feed - VIRAL FEATURE! */}
+      <div className="bg-gradient-to-br from-sol-purple/10 via-sol-dark to-sol-dark border border-sol-purple/20 rounded-2xl p-6 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-64 h-64 bg-sol-purple/5 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2"></div>
+
+          <div className="relative z-10">
+              <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                      <Flame className="text-orange-500" size={20} />
+                      <h3 className="text-xl font-bold text-white">🔥 Live Activity</h3>
+                      <span className="text-xs text-gray-500">Real-time updates</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-sol-green">
+                      <span className="animate-pulse">●</span> LIVE
+                  </div>
+              </div>
+
+              <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+                  {liveActivity.map((activity, idx) => (
+                      <div key={activity.id} className="bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg p-3 transition-all animate-in slide-in-from-top-2 cursor-pointer group" style={{animationDelay: `${idx * 100}ms`}}>
+                          <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 flex-1">
+                                  <span className="text-2xl">{activity.icon}</span>
+                                  <div className="flex-1">
+                                      <p className="text-sm text-white">
+                                          <strong className="text-sol-green">{activity.user}</strong>{' '}
+                                          {activity.type === 'win' ? (
+                                              <>won <strong className="text-yellow-500">${activity.amount.toLocaleString()}</strong> at Table #{activity.table}!</>
+                                          ) : activity.type === 'achievement' ? (
+                                              <>{activity.text} - <strong className="text-yellow-500">${activity.amount}</strong>!</>
+                                          ) : activity.type === 'challenge' ? (
+                                              <>{activity.text} - <strong className="text-sol-green">+${activity.amount}</strong> bonus</>
+                                          ) : (
+                                              <>{activity.text}!</>
+                                          )}
+                                      </p>
+                                      <p className="text-[10px] text-gray-500">Just now</p>
+                                  </div>
+                              </div>
+                              <ArrowRight size={14} className="text-gray-600 group-hover:text-sol-purple transition-colors" />
+                          </div>
+                      </div>
+                  ))}
+              </div>
+
+              <div className="mt-4 text-center">
+                  <Button variant="ghost" size="sm" className="text-sol-purple hover:bg-sol-purple/10">
+                      View All Activity <TrendingUp size={14} className="ml-1" />
+                  </Button>
+              </div>
+          </div>
+      </div>
+
       {/* Ecosystem Features Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-gradient-to-br from-[#1A1A24] to-[#13131F] border border-sol-purple/30 rounded-xl p-6 relative overflow-hidden group cursor-pointer" onClick={() => navigate('/profile?tab=ecosystem')}>
+          <div className="bg-gradient-to-br from-[#1A1A24] to-[#13131F] border border-sol-purple/30 rounded-xl p-6 relative overflow-hidden group cursor-pointer hover:border-sol-purple/50 transition-all" onClick={() => navigate('/profile?tab=ecosystem')}>
                <div className="absolute right-0 top-0 w-32 h-32 bg-sol-purple/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-sol-purple/30 transition-all"></div>
+               <span className="absolute top-2 right-2 text-xs bg-sol-purple/20 text-sol-purple px-2 py-0.5 rounded-full font-bold">HOT 🔥</span>
                <div className="relative z-10">
-                   <div className="flex items-center gap-2 mb-3">
-                       <div className="p-2 bg-sol-purple/20 rounded-lg text-sol-purple"><Coins size={20} /></div>
-                       <h3 className="text-xl font-bold text-white">Refer to Earn</h3>
+                   <div className="text-4xl mb-3">💸</div>
+                   <h3 className="text-2xl font-bold text-white mb-2">Refer to Earn</h3>
+                   <p className="text-gray-400 text-sm mb-4">Invite friends and earn up to <span className="text-sol-purple font-black text-lg">60%</span> commissions 🚀</p>
+                   <div className="flex items-center gap-2 text-xs text-gray-500 mb-4">
+                       <CheckCircle size={12} className="text-sol-green" />
+                       <span>Passive income forever</span>
                    </div>
-                   <p className="text-gray-400 text-sm mb-4">Invite friends and earn up to <span className="text-white font-bold">60%</span> override commissions from their activity.</p>
                    <span className="text-sol-purple text-sm font-bold flex items-center gap-1 group-hover:gap-2 transition-all">Get Your Link <ArrowRight size={14}/></span>
                </div>
           </div>
 
-          <div className="bg-gradient-to-br from-[#1A1A24] to-[#13131F] border border-sol-green/30 rounded-xl p-6 relative overflow-hidden group cursor-pointer" onClick={() => navigate('/profile?tab=ecosystem')}>
+          <div className="bg-gradient-to-br from-[#1A1A24] to-[#13131F] border border-sol-green/30 rounded-xl p-6 relative overflow-hidden group cursor-pointer hover:border-sol-green/50 transition-all" onClick={() => navigate('/lobby')}>
                <div className="absolute right-0 top-0 w-32 h-32 bg-sol-green/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-sol-green/30 transition-all"></div>
                <div className="relative z-10">
-                   <div className="flex items-center gap-2 mb-3">
-                       <div className="p-2 bg-sol-green/20 rounded-lg text-sol-green"><Users size={20} /></div>
-                       <h3 className="text-xl font-bold text-white">Share to Earn</h3>
+                   <div className="text-4xl mb-3">🎁</div>
+                   <h3 className="text-2xl font-bold text-white mb-2">Daily Rewards</h3>
+                   <p className="text-gray-400 text-sm mb-4">Complete challenges, earn bonuses, and climb the <span className="text-sol-green font-black">leaderboard</span> 📊</p>
+                   <div className="flex items-center gap-2 text-xs text-gray-500 mb-4">
+                       <Star size={12} className="text-yellow-500" />
+                       <span>New challenges every day</span>
                    </div>
-                   <p className="text-gray-400 text-sm mb-4">Grow the ecosystem. Invite friends using your unique link and earn <span className="text-white font-bold">up to 60%</span> override commissions.</p>
-                   <span className="text-sol-green text-sm font-bold flex items-center gap-1 group-hover:gap-2 transition-all">Get Referral Link <ArrowRight size={14}/></span>
+                   <span className="text-sol-green text-sm font-bold flex items-center gap-1 group-hover:gap-2 transition-all">View Challenges <ArrowRight size={14}/></span>
                </div>
           </div>
 
-          <div className="bg-gradient-to-br from-[#1A1A24] to-[#13131F] border border-sol-blue/30 rounded-xl p-6 relative overflow-hidden group cursor-pointer" onClick={() => navigate('/lobby')}>
+          <div className="bg-gradient-to-br from-[#1A1A24] to-[#13131F] border border-sol-blue/30 rounded-xl p-6 relative overflow-hidden group cursor-pointer hover:border-sol-blue/50 transition-all hover:scale-105 transform duration-300" onClick={() => navigate('/lobby')}>
                <div className="absolute right-0 top-0 w-32 h-32 bg-sol-blue/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-sol-blue/30 transition-all"></div>
+               <span className="absolute top-2 right-2 text-xs bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded-full font-bold animate-pulse">START HERE</span>
                <div className="relative z-10">
-                   <div className="flex items-center gap-2 mb-3">
-                       <div className="p-2 bg-sol-blue/20 rounded-lg text-sol-blue"><Play size={20} /></div>
-                       <h3 className="text-xl font-bold text-white">Play to Earn</h3>
+                   <div className="text-4xl mb-3">🃏</div>
+                   <h3 className="text-2xl font-bold text-white mb-2">Play Poker</h3>
+                   <p className="text-gray-400 text-sm mb-4">Join tables now! Top players win <span className="text-yellow-500 font-black">$X,XXX</span> monthly jackpot 🏆</p>
+                   <div className="flex items-center gap-2 text-xs text-gray-500 mb-4">
+                       <Zap size={12} className="text-sol-blue" />
+                       <span>Instant payouts in 2 seconds</span>
                    </div>
-                   <p className="text-gray-400 text-sm mb-4">Play more, win more! Top 3 players by hands compete for <span className="text-white font-bold">30%</span> of the monthly jackpot.</p>
-                   <span className="text-sol-blue text-sm font-bold flex items-center gap-1 group-hover:gap-2 transition-all">Start Playing <ArrowRight size={14}/></span>
+                   <span className="text-sol-blue text-sm font-bold flex items-center gap-1 group-hover:gap-2 transition-all">Start Playing <Play size={14}/></span>
                </div>
           </div>
       </div>

@@ -87,7 +87,14 @@ async function simulateReferralOverrides(playerId: string, playerName: string, r
     let totalReferralAmount = 0;
     const visited = new Set<string>();
 
-    const overrides = [];
+    const overrides: Array<{
+        userId: string;
+        username: string;
+        level: number;
+        rank: string;
+        rankPercent: number;
+        amount: number;
+    }> = [];
 
     while (level < 100) {
         const user = await db.user.findUnique({

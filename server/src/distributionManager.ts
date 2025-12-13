@@ -149,69 +149,72 @@ export class DistributionManager {
      */
     private async distributeGlobalPool() {
         try {
-            // Get all Rank 3 Partners
-            const partners = await db.user.findMany({
-                where: { referralRank: 3 },
+            // Get all Masters (highest rank)
+            const masters = await db.user.findMany({
+                where: { referralRank: 'MASTER' },
                 select: {
                     id: true,
                     username: true,
                     balance: true,
-                    totalWinnings: true // Use as proxy for team activity
+                    teamRakeWindow: true // Use team rake for distribution
                 }
             });
 
-            if (partners.length === 0) {
-                console.log('[Global Pool] No Rank 3 Partners found, skipping distribution');
+            if (masters.length === 0) {
+                console.log('[Global Pool] No Masters found, skipping distribution');
                 return;
             }
 
-            // Calculate total team activity (sum of all partners' total winnings as proxy)
-            const totalActivity = partners.reduce((sum, p) => sum + (p.totalWinnings || 0), 0);
+            // Calculate total team activity (sum of all masters' team rake)
+            const totalActivity = masters.reduce((sum, m) => sum + (m.teamRakeWindow || 0), 0);
 
             if (totalActivity === 0) {
-                console.log('[Global Pool] No partner activity, equal distribution');
+                console.log('[Global Pool] No master activity, equal distribution');
                 // Equal distribution if no activity tracked
-                const sharePerPartner = this.globalPoolBalance / partners.length;
+                const sharePerMaster = this.globalPoolBalance / masters.length;
 
-                for (const partner of partners) {
+                for (const master of masters) {
                     await db.user.update({
-                        where: { id: partner.id },
-                        data: { balance: { increment: sharePerPartner } }
+                        where: { id: master.id },
+                        data: { balance: { increment: sharePerMaster } }
                     });
 
                     await db.transaction.create({
                         data: {
-                            userId: partner.id,
+                            userId: master.id,
                             type: 'GLOBAL_POOL_SHARE',
-                            amount: sharePerPartner,
+                            amount: sharePerMaster,
                             status: 'COMPLETED'
                         }
                     });
 
-                    console.log(`[Global Pool] Distributed $${sharePerPartner.toFixed(2)} to ${partner.username} (equal share)`);
+                    console.log(`[Global Pool] Distributed $${sharePerMaster.toFixed(2)} to ${master.username} (equal share)`);
                 }
             } else {
                 // Proportional distribution based on team activity
-                for (const partner of partners) {
-                    const activityRatio = (partner.totalWinnings || 0) / totalActivity;
+                for (const master of masters) {
+                    const activityRatio = (master.teamRakeWindow || 0) / totalActivity;
                     const share = this.globalPoolBalance * activityRatio;
 
                     if (share > 0) {
                         await db.user.update({
-                            where: { id: partner.id },
-                            data: { balance: { increment: share } }
+                            where: { id: master.id },
+                            data: {
+                                balance: { increment: share },
+                                teamRakeWindow: 0  // Reset window after distribution
+                            }
                         });
 
                         await db.transaction.create({
                             data: {
-                                userId: partner.id,
+                                userId: master.id,
                                 type: 'GLOBAL_POOL_SHARE',
                                 amount: share,
                                 status: 'COMPLETED'
                             }
                         });
 
-                        console.log(`[Global Pool] Distributed $${share.toFixed(2)} to ${partner.username} (${(activityRatio * 100).toFixed(1)}% of pool)`);
+                        console.log(`[Global Pool] Distributed $${share.toFixed(2)} to ${master.username} (${(activityRatio * 100).toFixed(1)}% of pool)`);
                     }
                 }
             }
@@ -223,7 +226,7 @@ export class DistributionManager {
                 data: { communityPool: 0 }
             });
 
-            console.log(`[Global Pool] ✅ Distribution complete to ${partners.length} partners`);
+            console.log(`[Global Pool] ✅ Distribution complete to ${masters.length} masters`);
         } catch (e) {
             console.error('[Global Pool] Error during distribution:', e);
         }

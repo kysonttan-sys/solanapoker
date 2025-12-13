@@ -22,6 +22,24 @@ process.on('unhandledRejection', (reason, promise) => {
     process.exit(1);
 });
 
+// Helper function to get numeric level from referral rank
+const getRankLevel = (rank: string): number => {
+    const levels: Record<string, number> = {
+        'FREE': 0,
+        'AGENT': 1,
+        'BROKER': 2,
+        'PARTNER': 3,
+        'MASTER': 4
+    };
+    return levels[rank] || 0;
+};
+
+// Helper function to get rank string from numeric level
+const getRankFromLevel = (level: number): string => {
+    const ranks = ['FREE', 'AGENT', 'BROKER', 'PARTNER', 'MASTER'];
+    return ranks[level] || 'FREE';
+};
+
 const app = express();
 app.use(cors() as any);
 app.use(express.json({ limit: '10mb' })); // Increase limit for image uploads
@@ -203,7 +221,6 @@ app.get('/api/admin/revenue', async (req, res) => {
             rakeStats = await db.rakeDistribution.aggregate({
                 _sum: {
                     totalRake: true,
-                    hostShare: true,
                     referrerShare: true,
                     jackpotShare: true,
                     globalPoolShare: true,
@@ -851,10 +868,10 @@ app.get('/api/referrals/:userId', async (req, res) => {
             const directsWith1000Hands = directRefs.filter(ref => ref.totalHands >= 1000).length;
 
             // Count directs who are Agents (for Broker rank)
-            const directAgents = directRefs.filter(ref => ref.referralRank >= 1).length;
+            const directAgents = directRefs.filter(ref => getRankLevel(ref.referralRank) >= 1).length;
 
             // Count directs who are Brokers (for Partner rank)
-            const directBrokers = directRefs.filter(ref => ref.referralRank >= 2).length;
+            const directBrokers = directRefs.filter(ref => getRankLevel(ref.referralRank) >= 2).length;
 
             // Determine rank based on criteria
             // Priority: Partner > Broker > Agent > Scout
@@ -877,10 +894,11 @@ app.get('/api/referrals/:userId', async (req, res) => {
         }
 
         // Auto-update rank if changed
-        if (calculatedRank !== user.referralRank) {
+        const newRank = getRankFromLevel(calculatedRank);
+        if (newRank !== user.referralRank) {
             await db.user.update({
                 where: { id: userId },
-                data: { referralRank: calculatedRank }
+                data: { referralRank: newRank }
             });
         }
 
@@ -896,8 +914,8 @@ app.get('/api/referrals/:userId', async (req, res) => {
             });
 
             const directsWith1000Hands = directRefs.filter(ref => ref.totalHands >= 1000).length;
-            const directAgents = directRefs.filter(ref => ref.referralRank >= 1).length;
-            const directBrokers = directRefs.filter(ref => ref.referralRank >= 2).length;
+            const directAgents = directRefs.filter(ref => getRankLevel(ref.referralRank) >= 1).length;
+            const directBrokers = directRefs.filter(ref => getRankLevel(ref.referralRank) >= 2).length;
 
             if (rank === 0) {
                 // Scout → Agent: Need 3 directs with 1000+ hands

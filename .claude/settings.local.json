@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx prisma migrate dev:*)"
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(npx prisma:*)",
+      "Bash(dir /b:*)",
+      "Bash(psql:*)"
     ]
   }
 }

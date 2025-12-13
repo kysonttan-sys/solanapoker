@@ -101,10 +101,10 @@ export class GameManager {
     }
 
     private initializeDemoTables() {
-        const demoTable = PokerEngine.initializeGame('t1', 6, 1, 2, 'cash', 0, null);
+        const demoTable = PokerEngine.initializeGame('t1', 6, 1, 2, 'cash', null);
         this.tables.set('t1', demoTable);
 
-        const whaleTable = PokerEngine.initializeGame('table_whale_9', 9, 5, 10, 'cash', 0, null);
+        const whaleTable = PokerEngine.initializeGame('table_whale_9', 9, 5, 10, 'cash', null);
         this.tables.set('table_whale_9', whaleTable);
         console.log('[GameManager] Demo tables initialized');
     }
@@ -139,7 +139,7 @@ export class GameManager {
             const bb = Number(config?.bigBlind) || 2;
             const mode = config?.gameMode || 'cash';
             const creatorId = (user && user.id && user.id !== 'spectator') ? user.id : null;
-            table = PokerEngine.initializeGame(tableId, seats, sb, bb, mode, 0, creatorId);
+            table = PokerEngine.initializeGame(tableId, seats, sb, bb, mode, creatorId);
             this.tables.set(tableId, table);
             if (DEBUG) console.log(`[handleJoin] Created new table ${tableId} by creator ${creatorId}`);
         }
