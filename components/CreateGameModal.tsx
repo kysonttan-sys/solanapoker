@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { GameType, Speed, PokerTable } from '../types';
-import { Coins, TrendingUp, Info, PieChart, Crown, Gift, Layers, Globe, Zap, Smile, Lock, Key, Calculator } from 'lucide-react';
-import { getHostStatus, MOCK_USER, PROTOCOL_FEE_SPLIT } from '../constants'; // Importing Mock User for demo state
+import { Coins, TrendingUp, Info, PieChart, Crown, Gift, Layers, Globe, Zap, Smile, Lock, Key } from 'lucide-react';
+import { MOCK_USER, PROTOCOL_FEE_SPLIT } from '../constants'; // Importing Mock User for demo state
 import { getApiUrl } from '../utils/api';
 import { useWallet } from './WalletContextProvider';
 
@@ -37,59 +37,6 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
   
   // Standard Rake Cap (Fixed)
   const defaultRakeCap = 5;
-
-  // Logic for Host Rank (Using Mock User for Demo context)
-  const currentHostStatus = getHostStatus(MOCK_USER.ecosystemStats?.totalHostRevenueGenerated || 0);
-  const hostShare = currentHostStatus.share;
-  
-  // Revenue Projection State
-  const [projectedEarnings, setProjectedEarnings] = useState(0);
-
-  // Update Revenue Projection
-  useEffect(() => {
-      if (type === GameType.FUN) {
-          setProjectedEarnings(0);
-          return;
-      }
-
-      let estimatedRevenue = 0;
-
-      // 1. Hands Per Hour Estimation based on Speed AND Seats
-      // 6-max is faster than 9-max due to fewer players acting.
-      let handsPerHour = 0;
-
-      if (seats === 6) {
-          if (speed === Speed.REGULAR) handsPerHour = 60;
-          else if (speed === Speed.TURBO) handsPerHour = 90;
-          else if (speed === Speed.HYPER) handsPerHour = 140;
-      } else {
-          // 9-Max is slower
-          if (speed === Speed.REGULAR) handsPerHour = 45;
-          else if (speed === Speed.TURBO) handsPerHour = 70;
-          else if (speed === Speed.HYPER) handsPerHour = 100;
-      }
-
-      const sb = parseFloat(smallBlindInput) || 0;
-      const bb = sb * 2;
-
-      // 2. Average Pot Estimation based on Stack Depth (Buy-in)
-      // Deeper stacks = Larger average pots (implied odds, larger bluffs)
-      const minBuyIn = bb * (parseFloat(minBuyInBB) || 50);
-      const maxBuyIn = bb * (parseFloat(maxBuyInBB) || 100);
-      const avgStack = (minBuyIn + maxBuyIn) / 2;
-
-      // Heuristic: Average pot is roughly 10% of the average stack in play
-      // (Includes small pots, folded blinds, and massive all-ins averaged out)
-      const avgPot = avgStack * 0.10;
-
-      // 3. Rake Calculation (3% capped at $5)
-      const rakePerHand = Math.min(avgPot * 0.03, defaultRakeCap);
-
-      const hourlyTableRevenue = rakePerHand * handsPerHour;
-      estimatedRevenue = hourlyTableRevenue * (hostShare / 100);
-
-      setProjectedEarnings(estimatedRevenue);
-  }, [type, smallBlindInput, hostShare, speed, minBuyInBB, maxBuyInBB, seats]);
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -133,7 +80,7 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
         if (type === GameType.FUN) {
              alert(`Fun Table "${name}" Created!\n\nType: Play Money (Free)\nBlinds: ${sb}/${bb}\nStart Chips: ${buyInMinVal} (100bb Auto)\n\nNo deposits required - just for fun!`);
         } else {
-             alert(`Cash Game "${name}" Created!\n\nRake: 3% (Cap $${defaultRakeCap})\nYour Share: ${hostShare}% (${currentHostStatus.name})`);
+             alert(`Cash Game "${name}" Created!\n\nRake: 3% (Cap $${defaultRakeCap})`);
         }
 
         // Reset and close
@@ -180,29 +127,6 @@ export const CreateGameModal: React.FC<CreateGameModalProps> = ({ isOpen, onClos
                 Just for Fun
              </button>
         </div>
-
-        {/* Host Earnings Projector */}
-        {type !== GameType.FUN && (
-            <div className="bg-gradient-to-r from-[#13131F] to-black border border-sol-green/30 rounded-xl p-4 flex justify-between items-center relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-sol-green/10 rounded-full blur-xl -translate-y-1/2 translate-x-1/2 group-hover:bg-sol-green/20 transition-all"></div>
-                
-                <div>
-                    <div className="flex items-center gap-2 mb-1">
-                        <Calculator size={16} className="text-sol-green" />
-                        <h4 className="text-gray-300 text-xs font-bold uppercase tracking-wider">Projected Host Earnings</h4>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-mono font-bold text-white">${projectedEarnings.toFixed(2)}</span>
-                        <span className="text-xs text-gray-500">/ hour</span>
-                    </div>
-                </div>
-                
-                <div className="text-right z-10">
-                    <div className="text-[10px] text-gray-500 uppercase">Share of Fees</div>
-                    <div className={`text-xl font-bold ${currentHostStatus.color}`}>{hostShare}%</div>
-                </div>
-            </div>
-        )}
 
         <div className="space-y-4">
             <div>
