@@ -4,7 +4,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Lock, Save, Activity, DollarSign, Users, PauseCircle, PlayCircle, Settings, ShieldAlert, Database, Search, Ban, CheckCircle, XCircle, Terminal, Eye, Trash2, Megaphone, AlertTriangle, RefreshCw, Edit, Crown, Server, ListChecks, Zap, Bot, TrendingUp, Wallet, Gift, ArrowUpCircle, ArrowDownCircle, Clock, PieChart, Trophy } from 'lucide-react';
-import { ADMIN_WALLET_ADDRESS, LEADERBOARD_DATA, MOCK_TABLES, PROTOCOL_FEE_SPLIT, MOCK_USER, REFERRAL_TIERS, HOST_TIERS } from '../constants';
+import { ADMIN_WALLET_ADDRESS, LEADERBOARD_DATA, MOCK_TABLES, PROTOCOL_FEE_SPLIT, MOCK_USER, REFERRAL_TIERS } from '../constants';
 import { User } from '../types';
 import { Navigate } from 'react-router-dom';
 import { useConnection } from '../components/WalletContextProvider';
@@ -99,8 +99,7 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
                     balance: u.balance,
                     isBanned: u.isBanned || false,
                     isVerified: u.isVerified,
-                    referralRank: u.referralRank,
-                    hostRank: u.hostRank
+                    referralRank: u.referralRank
                 })));
             } catch (e) {
                 console.error('Failed to fetch users:', e);
@@ -236,7 +235,6 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
     // Config State
     const [config, setConfig] = useState({
         baseRake: 3.0,
-        maxHostShare: 40,
         referrerShare: PROTOCOL_FEE_SPLIT.referrerMax,
         jackpotShare: PROTOCOL_FEE_SPLIT.jackpot,
         globalPoolShare: PROTOCOL_FEE_SPLIT.globalPool,
@@ -663,18 +661,6 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
                                             <span className="text-gray-500 font-bold">%</span>
                                         </div>
                                     </div>
-                                    <div>
-                                        <label className="block text-sm text-gray-400 mb-2">Host Share Max %</label>
-                                        <div className="flex items-center gap-2">
-                                            <input 
-                                                type="number" 
-                                                value={config.maxHostShare} 
-                                                onChange={(e) => setConfig({...config, maxHostShare: parseFloat(e.target.value)})}
-                                                className="bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white w-full focus:border-sol-green focus:outline-none"
-                                            />
-                                            <span className="text-gray-500 font-bold">%</span>
-                                        </div>
-                                    </div>
                                 </div>
 
                                 <div className="p-4 bg-black/40 rounded-xl border border-white/5 space-y-4">
@@ -806,14 +792,9 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
                                         </td>
                                         <td className="p-4 font-mono text-gray-400 text-xs">{user.id === MOCK_USER.id ? ADMIN_WALLET_ADDRESS : user.id === 'u2' ? '8x...3k9L' : `Sol...${user.id}`}</td>
                                         <td className="p-4 text-center">
-                                            <div className="flex flex-col items-center gap-1">
-                                                <span className={`text-[10px] uppercase font-bold px-1.5 rounded bg-white/10 ${HOST_TIERS[user.hostRank]?.color || 'text-gray-400'}`}>
-                                                    Host: {HOST_TIERS[user.hostRank]?.name || 'Dealer'}
-                                                </span>
-                                                <span className={`text-[10px] uppercase font-bold px-1.5 rounded bg-white/10 ${REFERRAL_TIERS[user.referralRank]?.color || 'text-gray-400'}`}>
-                                                    Ref: {REFERRAL_TIERS[user.referralRank]?.name || 'Scout'}
-                                                </span>
-                                            </div>
+                                            <span className={`text-[10px] uppercase font-bold px-1.5 rounded bg-white/10 ${REFERRAL_TIERS[user.referralRank]?.color || 'text-gray-400'}`}>
+                                                {REFERRAL_TIERS[user.referralRank]?.name || 'FREE'}
+                                            </span>
                                         </td>
                                         <td className="p-4 text-right font-mono text-sol-green">${user.balance?.toLocaleString()}</td>
                                         <td className="p-4 text-center">
@@ -1117,21 +1098,6 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
                             >
                                 {REFERRAL_TIERS.map(tier => (
                                     <option key={tier.rank} value={tier.rank}>{tier.name} ({tier.commission}%)</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="text-sm font-bold text-gray-300 block mb-2 flex items-center gap-2">
-                                <Activity size={16} className="text-yellow-500"/> Host Rank (Fee Share)
-                            </label>
-                            <select 
-                                value={editingUser.hostRank}
-                                onChange={(e) => setEditingUser({...editingUser, hostRank: parseInt(e.target.value)})}
-                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-yellow-500 focus:outline-none"
-                            >
-                                {HOST_TIERS.map(tier => (
-                                    <option key={tier.rank} value={tier.rank}>{tier.name} ({tier.share}%)</option>
                                 ))}
                             </select>
                         </div>

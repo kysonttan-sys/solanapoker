@@ -376,7 +376,7 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
   const handleCopyReferral = () => {
      if (profileForm?.referralCode) {
         const url = `${window.location.origin}/#/ref/${profileForm.referralCode}`;
-        const message = `🚀 Join me on SOLPOKER X! The fair, decentralized poker platform on Solana.\n\n♣️ Play Cash Games & Fun Games\n💰 Earn as Host or Referrer\n\nJoin here: ${url}`;
+        const message = `🚀 Join me on SOLPOKER X! The fair, decentralized poker platform on Solana.\n\n♣️ Play Cash Games & Fun Games\n💰 Earn up to 60% Referral Commissions\n\nJoin with my code: ${profileForm.referralCode}\n\n${url}`;
         
         navigator.clipboard.writeText(message);
         alert(`Referral Content Copied!\n\n"${message}"`);
@@ -1150,7 +1150,7 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) =
                           <div>
                               <h3 className="text-gray-400 font-medium mb-1 flex items-center gap-2"><Gift size={16} className="text-sol-green"/> Pending Rewards</h3>
                               <div className="text-4xl font-bold text-white mb-2">${profileForm.ecosystemStats?.pendingRewards?.toLocaleString() || '0'}</div>
-                              <p className="text-sm text-gray-400">Total earned from Hosting & Referrals</p>
+                              <p className="text-sm text-gray-400">Total earned from Referral Overrides</p>
                           </div>
                           <Button onClick={handleClaimRewards} className="shadow-[0_0_20px_rgba(138,66,255,0.4)]">
                               Claim to Wallet

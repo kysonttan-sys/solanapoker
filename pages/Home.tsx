@@ -196,15 +196,15 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables }) 
 
       {/* Ecosystem Features Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-gradient-to-br from-[#1A1A24] to-[#13131F] border border-sol-purple/30 rounded-xl p-6 relative overflow-hidden group cursor-pointer" onClick={() => onCreateGame(GameType.CASH)}>
+          <div className="bg-gradient-to-br from-[#1A1A24] to-[#13131F] border border-sol-purple/30 rounded-xl p-6 relative overflow-hidden group cursor-pointer" onClick={() => navigate('/profile?tab=ecosystem')}>
                <div className="absolute right-0 top-0 w-32 h-32 bg-sol-purple/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-sol-purple/30 transition-all"></div>
                <div className="relative z-10">
                    <div className="flex items-center gap-2 mb-3">
                        <div className="p-2 bg-sol-purple/20 rounded-lg text-sol-purple"><Coins size={20} /></div>
-                       <h3 className="text-xl font-bold text-white">Host to Earn</h3>
+                       <h3 className="text-xl font-bold text-white">Refer to Earn</h3>
                    </div>
-                   <p className="text-gray-400 text-sm mb-4">Be the House. Create cash game tables and earn <span className="text-white font-bold">up to 40%</span> of all rake generated.</p>
-                   <span className="text-sol-purple text-sm font-bold flex items-center gap-1 group-hover:gap-2 transition-all">Start Hosting <ArrowRight size={14}/></span>
+                   <p className="text-gray-400 text-sm mb-4">Invite friends and earn up to <span className="text-white font-bold">60%</span> override commissions from their activity.</p>
+                   <span className="text-sol-purple text-sm font-bold flex items-center gap-1 group-hover:gap-2 transition-all">Get Your Link <ArrowRight size={14}/></span>
                </div>
           </div>
 
@@ -215,7 +215,7 @@ export const Home: React.FC<HomeProps> = ({ onCreateGame, onJoinGame, tables }) 
                        <div className="p-2 bg-sol-green/20 rounded-lg text-sol-green"><Users size={20} /></div>
                        <h3 className="text-xl font-bold text-white">Share to Earn</h3>
                    </div>
-                   <p className="text-gray-400 text-sm mb-4">Grow the ecosystem. Invite friends using your unique link and earn <span className="text-white font-bold">up to 20%</span> of their fees forever.</p>
+                   <p className="text-gray-400 text-sm mb-4">Grow the ecosystem. Invite friends using your unique link and earn <span className="text-white font-bold">up to 60%</span> override commissions.</p>
                    <span className="text-sol-green text-sm font-bold flex items-center gap-1 group-hover:gap-2 transition-all">Get Referral Link <ArrowRight size={14}/></span>
                </div>
           </div>

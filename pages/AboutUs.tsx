@@ -25,13 +25,13 @@ export const AboutUs: React.FC = () => {
     },
     {
       icon: <Users size={32} className="text-yellow-500" />,
-      title: "Host-to-Earn",
-      desc: "Be the House. Unique to SOLPOKER X, anyone can create a table and earn up to 40% of the rake generated. Run your own club without the infrastructure costs."
+      title: "Refer-to-Earn",
+      desc: "Build your poker network and earn up to 60% override commissions when your downline plays. Our Hybrid Override Model rewards you for growing the community."
     },
     {
       icon: <Network size={32} className="text-orange-500" />,
-      title: "Share-to-Earn",
-      desc: "Grow the ecosystem and get paid forever. Our multi-tier referral system allows you to earn up to 20% commissions on every hand your referred players play."
+      title: "Multi-Tier Rewards",
+      desc: "Grow the ecosystem and get paid forever. Our multi-tier referral system allows you to earn up to 60% override commissions on every hand your referred players play."
     },
     {
       icon: <PieChart size={32} className="text-red-500" />,
@@ -80,7 +80,7 @@ export const AboutUs: React.FC = () => {
                      We believe online poker is broken. High rake, slow withdrawals, opaque RNG, and centralized risk have plagued players for decades.
                  </p>
                  <p className="text-gray-300 text-lg leading-relaxed">
-                     SOLPOKER X was built to solve this using the Solana Blockchain. We aim to create a self-sustaining ecosystem where players, hosts, and stakers all share in the success of the platform. We don't just want you to play; we want you to own a piece of the action.
+                     SOLPOKER X was built to solve this using the Solana Blockchain. We aim to create a self-sustaining ecosystem where players and network builders all share in the success of the platform. We don't just want you to play; we want you to own a piece of the action.
                  </p>
              </div>
              <div className="shrink-0">
